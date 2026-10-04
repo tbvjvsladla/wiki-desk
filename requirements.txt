@@ -1,0 +1,3 @@
+# Python 3.10+ 필요. helper runtime dependency만 선언한다.
+# tests는 stdlib unittest이며 자동 설치하지 않는다.
+PyYAML>=6,<7

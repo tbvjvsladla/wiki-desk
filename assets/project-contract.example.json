@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "project_name": "Example project",
+  "wiki_dir": "__llm-wiki",
+  "source_roots": [
+    "docs"
+  ],
+  "excluded_roots": [
+    "docs/private",
+    "docs/generated"
+  ],
+  "authority_rules": [
+    {
+      "pattern": "docs/decisions/**",
+      "document_type": "decision",
+      "authority_rank": 100,
+      "role": "decision"
+    },
+    {
+      "pattern": "docs/reports/**",
+      "document_type": "report",
+      "authority_rank": 70,
+      "role": "result-evidence"
+    },
+    {
+      "pattern": "docs/plans/**",
+      "document_type": "plan",
+      "authority_rank": 30,
+      "role": "intent"
+    }
+  ],
+  "fallback": {
+    "document_type": "reference",
+    "authority_rank": 0,
+    "role": "reference"
+  },
+  "copy_policy": "path_reference"
+}

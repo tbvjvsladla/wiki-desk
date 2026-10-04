@@ -1,0 +1,146 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "wiki-desk 프로젝트 합의 계약",
+  "description": "합의할 계약의 구조이며 실제 인간 승인 증거가 아니다. known field 의미는 고정하고 unknown extension은 보존할 수 있다. filesystem 안전성은 runtime 검사와 함께 확인한다.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "project_name",
+    "wiki_dir",
+    "source_roots",
+    "excluded_roots",
+    "authority_rules",
+    "fallback",
+    "copy_policy"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "project_name": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "\\S"
+    },
+    "wiki_dir": {
+      "type": "string",
+      "enum": [
+        "__llm-wiki",
+        "__llm_wiki"
+      ],
+      "description": "정확한 리터럴을 선택하며 암묵적 rename은 없다."
+    },
+    "source_roots": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/sourcePath"
+      }
+    },
+    "excluded_roots": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/relativePath"
+      }
+    },
+    "authority_rules": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/authorityRule"
+      },
+      "description": "순서 있는 규칙. 현재 runtime은 첫 일치 규칙을 사용하고 query에서 rank순으로 후보를 정렬한다. 예제 순서를 강제하지 않는다."
+    },
+    "fallback": {
+      "$ref": "#/$defs/fallback"
+    },
+    "copy_policy": {
+      "type": "string",
+      "const": "path_reference",
+      "description": "원문 body·snapshot 복사를 허용하지 않는 경로참조 정책."
+    }
+  },
+  "additionalProperties": true,
+  "$defs": {
+    "relativePath": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!.*[\\u0000-\\u0020\\u007F]$)(?![\\u0000-\\u0020])(?!.*[\\u0000-\\u001F\\u007F\\\\:])(?!/)(?!.*(?:^|/)\\.{1,2}(?:/|$))[^/]+(?:/[^/]+)*$",
+      "description": "프로젝트 root 상대 canonical 경로. 절대경로·drive/URI·backslash·control·빈 segment·dot/traversal segment·양끝 공백을 거부한다. symlink와 실제 존재는 runtime에서 검증한다."
+    },
+    "sourcePath": {
+      "anyOf": [
+        {
+          "const": "."
+        },
+        {
+          "$ref": "#/$defs/relativePath"
+        }
+      ],
+      "description": "가능한 좁은 원문 파일/디렉터리를 지정한다. 프로젝트 전체를 뜻하는 .는 범위가 명시 합의된 경우에만 사용한다."
+    },
+    "fallback": {
+      "type": "object",
+      "required": [
+        "document_type",
+        "authority_rank",
+        "role"
+      ],
+      "properties": {
+        "document_type": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S",
+          "description": "수신 프로젝트가 합의한 종류. 고정 taxonomy가 아니다."
+        },
+        "authority_rank": {
+          "type": "integer",
+          "description": "합의한 후보 탐색 rank. 높은 rank를 먼저 검토하며 승인·실행 허가가 아니다."
+        },
+        "role": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S",
+          "description": "수신 프로젝트가 합의한 문서 역할."
+        }
+      },
+      "additionalProperties": true
+    },
+    "authorityRule": {
+      "type": "object",
+      "required": [
+        "pattern",
+        "document_type",
+        "authority_rank",
+        "role"
+      ],
+      "properties": {
+        "pattern": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?!.*[\\u0000-\\u0020\\u007F]$)(?![\\u0000-\\u0020])(?!.*[\\u0000-\\u001F\\u007F\\\\:])(?!/)(?!.*(?:^|/)\\.{1,2}(?:/|$))[^/]+(?:/[^/]+)*$",
+          "description": "프로젝트 상대 glob. fnmatch 일치 기준이고 regex 또는 OS 절대경로가 아니다. 리터럴 source_roots와 구별한다."
+        },
+        "document_type": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S",
+          "description": "수신 프로젝트가 합의한 종류. 고정 taxonomy가 아니다."
+        },
+        "authority_rank": {
+          "type": "integer",
+          "description": "합의한 후보 탐색 rank. 높은 rank를 먼저 검토하며 승인·실행 허가가 아니다."
+        },
+        "role": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S",
+          "description": "수신 프로젝트가 합의한 문서 역할."
+        }
+      },
+      "additionalProperties": true
+    }
+  }
+}

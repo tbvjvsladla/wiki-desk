@@ -1,0 +1,172 @@
+{
+  "directories": [
+    "assets",
+    "references",
+    "scripts",
+    "tests"
+  ],
+  "entrypoints": [
+    "scripts/wiki_desk.py",
+    "scripts/package_manifest.py"
+  ],
+  "file_count": 26,
+  "files": [
+    {
+      "executable": false,
+      "path": ".gitattributes",
+      "sha256": "2bf67de9187a36d77a5ba529227c23c028c2c7ef4cbd8802196c5f2e0446eae9",
+      "size": 173
+    },
+    {
+      "executable": false,
+      "path": ".gitignore",
+      "sha256": "72b73433b3a9cf72a74989690334ee50c0c696868ddb5a0c690757194b53fe9d",
+      "size": 322
+    },
+    {
+      "executable": false,
+      "path": "LICENSE",
+      "sha256": "69f7447b9f274b6b085e9aad9528e635448f40e9860a92723bbf38b04a7592cd",
+      "size": 1173
+    },
+    {
+      "executable": false,
+      "path": "README.md",
+      "sha256": "1ba4876d259ddd27bb5a7e8a168132d29b01a9e672f5aaf9cd06445e13af8ae5",
+      "size": 11419
+    },
+    {
+      "executable": false,
+      "path": "SKILL.md",
+      "sha256": "77bc92791abc8c92ae7fbc224358d56c516b248cf709aa6cadf88c4197fb6de9",
+      "size": 8063
+    },
+    {
+      "executable": false,
+      "path": "VERSION",
+      "sha256": "59854984853104df5c353e2f681a15fc7924742f9a2e468c29af248dce45ce03",
+      "size": 6
+    },
+    {
+      "executable": false,
+      "path": "assets/project-contract.example.json",
+      "sha256": "e3599a529d9dc636e6d524aa68021559356e633601a944a8efbe945f2e3e1497",
+      "size": 772
+    },
+    {
+      "executable": false,
+      "path": "assets/project-contract.schema.json",
+      "sha256": "8c102bf1533e97b04f2a9baf42da210aadab6a3e3350591ab04324694d142992",
+      "size": 4707
+    },
+    {
+      "executable": false,
+      "path": "references/authority.md",
+      "sha256": "3974beecaf2069648104f5a01e01253edd38f9e4a6a974d1dc4a3b01db9c8610",
+      "size": 3952
+    },
+    {
+      "executable": false,
+      "path": "references/bootstrap.md",
+      "sha256": "4856beb9006578793d3676a8093c01df8bf541f17e8497a08ae9467d95959c8a",
+      "size": 5874
+    },
+    {
+      "executable": false,
+      "path": "references/external-sources.md",
+      "sha256": "c4a0c4b5d9238cdb63d3e292b2cdfc396362dc64777f4bd82adc60c9c3905dc3",
+      "size": 9599
+    },
+    {
+      "executable": false,
+      "path": "references/installation.md",
+      "sha256": "6d3964896888179b9ce5654d15bcdf5a848d47755f52f328d8b48342d3694bf2",
+      "size": 8703
+    },
+    {
+      "executable": false,
+      "path": "references/maintenance.md",
+      "sha256": "207d74ce5692d93697df14f6705927ab62a5a5049efd85dc57a2ccd6f795a75d",
+      "size": 5666
+    },
+    {
+      "executable": false,
+      "path": "references/okf.md",
+      "sha256": "c1f417af1b3b84431d375d6b7172793777d241148fe56697e9f85c9107a1db51",
+      "size": 6291
+    },
+    {
+      "executable": false,
+      "path": "requirements-dev.txt",
+      "sha256": "eab721956f2d3a14f0e2ad227ffbf787f26e1861c7b4051ddf21a6bac5a5f1c4",
+      "size": 99
+    },
+    {
+      "executable": false,
+      "path": "requirements.txt",
+      "sha256": "677a936534e6b07e859972ad3de306beb92f73e4d6086725c44f694e8b56041f",
+      "size": 143
+    },
+    {
+      "executable": false,
+      "path": "scripts/fs_safety.py",
+      "sha256": "f5e1a8fcc438d3dddcd428f50ba6a6e71b19f1899b76db66e9460e412a3f725c",
+      "size": 17841
+    },
+    {
+      "executable": false,
+      "path": "scripts/okf_bundle.py",
+      "sha256": "a575f3d6f01d6a45ae7ee14687f1d93a3f605ba1de884c604ddf2943f7488f84",
+      "size": 24280
+    },
+    {
+      "executable": false,
+      "path": "scripts/package_manifest.py",
+      "sha256": "22b100aa0cf417d2f802b81f8c06bfa854a249ab7fa66b3a80cd4f3988861c45",
+      "size": 5357
+    },
+    {
+      "executable": false,
+      "path": "scripts/wiki_desk.py",
+      "sha256": "dbed66af753c0644c73e1bcf8204b9536b357ac26ed7dd8a01aa33c5a794c8f1",
+      "size": 41801
+    },
+    {
+      "executable": false,
+      "path": "scripts/wiki_runtime.py",
+      "sha256": "b25d8166aa8c55b4d279dab9bb50a330284e20ded874de23110a6c05f42f8bb5",
+      "size": 39644
+    },
+    {
+      "executable": false,
+      "path": "tests/test_lifecycle.py",
+      "sha256": "b17f9a0023ad764391357e8ed9b63db99dad2682d09ea3ed79b1894be25945dd",
+      "size": 41863
+    },
+    {
+      "executable": false,
+      "path": "tests/test_okf_portable.py",
+      "sha256": "7b57707c28ca2fbde88ea0e382c1396909dc356fb4cc5534f136f2151449d3c5",
+      "size": 20194
+    },
+    {
+      "executable": false,
+      "path": "tests/test_privacy_policy.py",
+      "sha256": "ca93363b8356d1d3b1ffd6d25443c611d0ff0d283441806cc085b17bbff09377",
+      "size": 4151
+    },
+    {
+      "executable": false,
+      "path": "tests/test_release_safety.py",
+      "sha256": "fd602712d5d2f91ffa10085fa4802ca12b9555ec51a26c38f622d3225b760515",
+      "size": 19100
+    },
+    {
+      "executable": false,
+      "path": "tests/test_runtime.py",
+      "sha256": "b3eae0a3914d1903390ee0811b4e7067682fdff18b280b8a65bc4844817d21da",
+      "size": 26850
+    }
+  ],
+  "schema_version": 1
+}

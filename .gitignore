@@ -1,0 +1,18 @@
+# Python 실행 cache와 로컬 환경
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# 로컬 인증·비밀 파일; 배포 자산을 통째로 제외하지 않음
+.env
+.env.*
+*.pem
+*.key
+
+# 대상 적용 receipt/계약과 로컬 도구 cache는 배포 source가 아님
+.wiki-desk/
+.cache/
