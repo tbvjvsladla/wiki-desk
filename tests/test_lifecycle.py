@@ -30,8 +30,8 @@ import fs_safety as fs  # type: ignore[import-not-found]
 import package_manifest as manifest  # type: ignore[import-not-found]
 import wiki_desk as desk  # type: ignore[import-not-found]
 
-FIXTURE_PARENT = Path(os.environ.get("WIKI_DESK_TEST_TMPDIR", str(
-    Path.home() / ".hermes/cache/scratch/wiki-desk-release-lifecycle")))
+SKILL = desk.HOSTS["hermes"]
+FIXTURE_PARENT = Path(os.environ.get("WIKI_DESK_TEST_TMPDIR", tempfile.gettempdir()))
 
 
 def tree(root: Path) -> tuple:
@@ -403,7 +403,7 @@ class RuntimeFixture:
         return {"conformant": True, "error_count": 0, "expected": 2, "collected": 2, "unique": 2}
 
 
-class LifecycleUnitTests(PackageFixtureCase):
+class LifecycleFixtureCase(PackageFixtureCase):
     def setUp(self):
         super().setUp()
         self.package = self.make_package()
@@ -428,6 +428,8 @@ class LifecycleUnitTests(PackageFixtureCase):
     def install(self, host="hermes"):
         return desk.apply_plan(self.install_plan(host))
 
+
+class LifecycleUnitTests(LifecycleFixtureCase):
     def test_install_dryrun_is_exact_write_zero(self):
         before = tree(self.root)
         source_before = tree(self.package)
@@ -579,9 +581,11 @@ class LifecycleUnitTests(PackageFixtureCase):
         self.assertEqual(wiki_before, tree(self.root / "__llm-wiki"))
         self.assertEqual((self.root / "HERMES.md").read_bytes(), b"Existing user context\n")
         self.assertEqual((self.root / ".env").read_bytes(), b"Unrelated user environment\n")
-        self.assertFalse((self.root / ".agents/skills/wiki-desk").exists())
-        self.assertTrue((self.root / desk.CONTRACT).is_file())
-        self.assertTrue((self.root / desk.RECEIPT).is_file())
+        # Package files are gone; the operating state stays inside the skill dir.
+        skill = self.root / SKILL
+        self.assertEqual(sorted(p.relative_to(skill).as_posix() for p in skill.rglob("*") if p.is_file()),
+                         ["project/contract.json", "project/receipt.json"])
+        self.assertFalse((self.root / desk.LEGACY_ADMIN).exists())
         self.assertFalse(desk.status(self.root)["installed"])
         self.assert_refusal_unchanged(lambda: desk.prepare_remove(self.root, remove_unchanged_wiki=True))
 
@@ -609,7 +613,7 @@ class LifecycleUnitTests(PackageFixtureCase):
 
     def test_first_preimage_receipt_cumulative_sync_format(self):
         self.install()
-        receipt_before = desk._read_receipt(self.root)
+        receipt_before = desk._read_receipt(self.root, SKILL)
         source = self.root / "__llm-wiki/source-registry.md"
         source_preimage = receipt_before["owned_files"][source.relative_to(self.root).as_posix()]["preimage"]
         desk.apply_plan(desk.prepare_runtime_action(self.root, "sync", now="fixed"))
@@ -620,7 +624,7 @@ class LifecycleUnitTests(PackageFixtureCase):
         desk.validate_plan(plan)
         self.assertEqual(before, tree(self.root))
         desk.apply_plan(plan)
-        receipt = desk._read_receipt(self.root)
+        receipt = desk._read_receipt(self.root, SKILL)
         key = "__llm-wiki/source-registry.md"
         self.assertEqual(receipt["owned_files"][key]["preimage"], source_preimage)
         user_preimage = receipt["owned_files"]["__llm-wiki/user.md"]["preimage"]
@@ -667,7 +671,7 @@ class LifecycleUnitTests(PackageFixtureCase):
                         desk.apply_plan(desk.prepare_runtime_action(self.root, "sync", now="fixed"), fault=fault)
                     self.assertEqual(installed, tree(self.root))
             self.assertTrue(desk.apply_plan(plan)["readback_verified"])
-        receipt = desk._read_receipt(self.root)
+        receipt = desk._read_receipt(self.root, SKILL)
         self.assertEqual(receipt["owned_files"]["__llm-wiki/generated/nested/new.md"]["preimage"], {"kind": "missing"})
         desk.apply_plan(desk.prepare_remove(self.root, remove_unchanged_wiki=True))
         self.assertEqual(initial, tree(self.root))
@@ -718,10 +722,10 @@ class LifecycleUnitTests(PackageFixtureCase):
 
     def test_receipt_scope_forgery_cannot_delete_context(self):
         self.install()
-        receipt = desk._read_receipt(self.root)
+        receipt = desk._read_receipt(self.root, SKILL)
         receipt["owned_files"]["HERMES.md"] = {**desk._file_record((self.root / "HERMES.md").read_bytes(), 0o644),
                                                 "preimage": {"kind": "missing"}}
-        self.put(desk.RECEIPT, desk.json_bytes(receipt))
+        self.put(desk.receipt_rel(SKILL), desk.json_bytes(receipt))
         self.assert_refusal_unchanged(lambda: desk.prepare_remove(self.root, remove_unchanged_wiki=True))
 
     def test_cli_exact_actions_errors_and_readonly_check_query_scan(self):

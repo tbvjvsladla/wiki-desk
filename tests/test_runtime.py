@@ -18,6 +18,8 @@ import wiki_runtime as runtime
 import okf_bundle as core
 
 NOW = '2026-01-02T03:04:05+00:00'
+# Operating state lives inside the installed skill (wiki_desk.contract_rel).
+CONTRACT_REL = '.agents/skills/wiki-desk/project/contract.json'
 
 
 def contract(wiki='__llm-wiki'):
@@ -62,7 +64,7 @@ def project(tmp_path):
 @pytest.fixture
 def seeded(project):
     cfg = contract()
-    put(project, '.wiki-desk/contract.json', json.dumps(cfg))
+    put(project, CONTRACT_REL, json.dumps(cfg))
     fixture_apply(project, runtime.scaffold_files(project, cfg, now=NOW))
     return project, cfg
 
@@ -116,12 +118,17 @@ def test_rule_requires_every_field(project, key):
 
 def test_contract_is_outside_wiki_duplicate_keys_refused(seeded):
     root, cfg = seeded
-    assert runtime.read_contract(root) == cfg
-    put(root, '__llm-wiki/contract.json', '{"this": "is not authoritative"}')
-    assert runtime.read_contract(root) == cfg
-    put(root, '.wiki-desk/contract.json', '{"schema_version": 1, "schema_version": 1}')
+    assert runtime.read_contract(root, CONTRACT_REL) == cfg
+    put(root, '__llm-wiki/contract.json', json.dumps(cfg))
+    assert runtime.read_contract(root, CONTRACT_REL) == cfg
+    with pytest.raises(ValueError, match='outside the wiki'):
+        runtime.read_contract(root, '__llm-wiki/contract.json')
+    for unsafe in ('../contract.json', '/abs/contract.json', ''):
+        with pytest.raises(ValueError):
+            runtime.read_contract(root, unsafe)
+    put(root, CONTRACT_REL, '{"schema_version": 1, "schema_version": 1}')
     with pytest.raises(ValueError, match='duplicate'):
-        runtime.read_contract(root)
+        runtime.read_contract(root, CONTRACT_REL)
 
 
 def test_inventory_excludes_control_generated_secret_and_accepts_files(project):
@@ -233,10 +240,10 @@ def test_symlink_and_escape_refused(seeded, tmp_path, place):
     elif place == 'wiki-dir':
         (root / '__llm-wiki/link').symlink_to(root / 'docs', target_is_directory=True)
     elif place == 'contract':
-        (root / '.wiki-desk/contract.json').unlink()
-        (root / '.wiki-desk/contract.json').symlink_to(root / 'docs/decisions/a.md')
+        (root / CONTRACT_REL).unlink()
+        (root / CONTRACT_REL).symlink_to(root / 'docs/decisions/a.md')
         with pytest.raises(ValueError, match='symlink'):
-            runtime.read_contract(root)
+            runtime.read_contract(root, CONTRACT_REL)
         return
     else:
         alias = root.parent / (root.name + '-alias')
@@ -399,7 +406,7 @@ def test_no_package_bytecode_cache_on_documented_no_bytecode_import(tmp_path):
     code = 'import sys; sys.path.insert(0, sys.argv[1]); import wiki_runtime; print(len(wiki_runtime.__all__))'
     result = subprocess.run([sys.executable, '-B', '-c', code, str(folder)], capture_output=True, text=True, check=False)
     assert result.returncode == 0, result.stderr
-    assert result.stdout.strip() == '8'  # Seven runtime APIs plus shared source_exclusions.
+    assert result.stdout.strip() == '9'  # Runtime APIs, shared exclusions and transition validator.
     assert not (folder / '__pycache__').exists()
 
 

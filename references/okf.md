@@ -2,7 +2,7 @@
 
 ## 스킬·지식·운영 계약의 세 층
 
-`SKILL.md`는 Agent Skills 형식이고 이 문서는 그 지원 자료다. 대상의 `wiki_dir` 내부는 OKF bundle이며 `.wiki-desk/contract.json`/receipt는 bundle 밖 운영 계약이다. 이 지원 폴더나 패키지 전체를 OKF concept corpus라고 보지 않는다.
+`SKILL.md`는 Agent Skills 형식이고 이 문서는 그 지원 자료다. 대상의 `wiki_dir` 내부는 OKF bundle이며 설치된 스킬의 `project/contract.json`과 `project/receipt.json`은 bundle 밖 운영 상태다. `project/`는 target-local이므로 패키지 인벤토리에서 제외한다. 이 지원 폴더나 패키지 전체를 OKF concept corpus라고 보지 않는다.
 
 일반 OKF concept은 UTF-8 Markdown과 파일 시작의 `---` YAML frontmatter를 사용하며, `type`이 항상 필수인 유일한 key다. `title`, `description`, `tags`, `resource`, provenance/trust/lifecycle은 선택이다. 알 수 없는 `type`은 generic concept으로 읽고 unknown key·producer extension을 round-trip에서 보존한다. 스킬의 string-valued `metadata` 제약을 OKF 전체 YAML에 적용하지 않는다.
 

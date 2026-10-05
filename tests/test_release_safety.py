@@ -28,14 +28,13 @@ import fs_safety as fs
 import package_manifest as manifest
 import wiki_desk as desk
 import wiki_runtime as runtime
-from test_lifecycle import tree
+from tests.test_lifecycle import SKILL, tree
 
-PARENT = Path(os.environ.get("WIKI_DESK_TEST_TMPDIR", str(
-    Path.home() / ".hermes/cache/scratch/wiki-desk-safety-repair")))
+PARENT = Path(os.environ.get("WIKI_DESK_TEST_TMPDIR", tempfile.gettempdir()))
 STAMP = "2026-10-04T00:00:00Z"
 
 
-class ReleaseSafetyTests(unittest.TestCase):
+class ReleaseFixtureCase(unittest.TestCase):
     def setUp(self):
         PARENT.mkdir(parents=True, exist_ok=True)
         temporary = tempfile.TemporaryDirectory(prefix="actual-", dir=PARENT)
@@ -91,6 +90,7 @@ class ReleaseSafetyTests(unittest.TestCase):
         self.assertEqual(tree(self.root), before)
         return result
 
+class ReleaseSafetyTests(ReleaseFixtureCase):
     def test_source_policy_real_reads_scan_denominator_and_allowed_drift(self):
         secrets = [".env", "docs/.env", "docs/.env.local", "docs/secrets/password.md",
                    "docs/credentials.json", "docs/cert.key", "docs/generated/hidden.md",
@@ -283,7 +283,7 @@ class ReleaseSafetyTests(unittest.TestCase):
             self.put("__llm-wiki/" + leaf, data + b"\nUSER_AUTHORED_IMPORTANT_NOTE [[SCHEMA]]\n")
         code, result = self.cli("format", "--apply")
         self.assertEqual(code, 0, result)
-        receipt = desk._read_receipt(self.root)
+        receipt = desk._read_receipt(self.root, SKILL)
         for leaf in ("index.md", "log.md", "SCHEMA.md"):
             key = "__llm-wiki/" + leaf
             self.assertTrue(receipt["owned_files"][key].get("protected_user_content"), key)
@@ -300,7 +300,7 @@ class ReleaseSafetyTests(unittest.TestCase):
         code, result = self.cli("format", "--apply")
         self.assertEqual(code, 0, result)
         for leaf in ("index.md", "log.md", "SCHEMA.md"):
-            self.assertTrue(desk._read_receipt(self.root)["owned_files"]["__llm-wiki/" + leaf]["protected_user_content"])
+            self.assertTrue(desk._read_receipt(self.root, SKILL)["owned_files"]["__llm-wiki/" + leaf]["protected_user_content"])
         self.blocked("remove", "--apply", "--remove-unchanged-wiki")
         wiki_before = tree(self.root / "__llm-wiki")
         code, result = self.cli("remove", "--apply")
@@ -315,15 +315,15 @@ class ReleaseSafetyTests(unittest.TestCase):
         self.put("__llm-wiki/new.md", b"---\ntype: Reference\n---\n# New page\n")
         code, result = self.cli("sync", "--apply")
         self.assertEqual(code, 0, result)
-        receipt = desk._read_receipt(self.root)
+        receipt = desk._read_receipt(self.root, SKILL)
         self.assertTrue(receipt["owned_files"]["__llm-wiki/index.md"].get("protected_user_content"))
         self.blocked("remove", "--apply", "--remove-unchanged-wiki")
 
     def test_receipt_protection_flag_must_be_boolean_and_status_guarded(self):
         self.install()
-        receipt = desk._read_receipt(self.root)
+        receipt = desk._read_receipt(self.root, SKILL)
         receipt["owned_files"]["__llm-wiki/index.md"]["protected_user_content"] = "false"
-        self.put(desk.RECEIPT, desk.json_bytes(receipt))
+        self.put(desk.receipt_rel(SKILL), desk.json_bytes(receipt))
         self.blocked("status")
         self.blocked("remove", "--apply", "--remove-unchanged-wiki")
 

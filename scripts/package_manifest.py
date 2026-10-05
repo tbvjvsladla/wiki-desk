@@ -23,12 +23,18 @@ REQUIRED_FILES = (
     "scripts/fs_safety.py", "scripts/wiki_desk.py", "scripts/package_manifest.py",
     "scripts/wiki_runtime.py", "scripts/okf_bundle.py",
     "tests/test_lifecycle.py", "tests/test_runtime.py", "tests/test_okf_portable.py",
-    "tests/test_privacy_policy.py", "tests/test_release_safety.py",
+    "tests/test_privacy_policy.py", "tests/test_release_safety.py", "tests/test_state_layout.py",
+    "tests/test_lifecycle_extensions.py", "tests/__init__.py",
+    "tests/test_source_suffixes.py", "tests/test_reconciliation.py", "tests/test_portability.py",
     "assets/project-contract.example.json", "assets/project-contract.schema.json",
     "references/bootstrap.md", "references/okf.md", "references/authority.md",
     "references/installation.md", "references/maintenance.md", "references/external-sources.md",
 )
 CACHE_NAMES = frozenset(("__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache", ".cache"))
+# Installed-skill operating state (project contract + lifecycle receipt). It is
+# target-local, never package content: the package inventory excludes this
+# top-level directory so an installed copy still verifies with its state inside.
+STATE_DIR = "project"
 
 
 class ManifestMissing(SafetyError):
@@ -37,7 +43,7 @@ class ManifestMissing(SafetyError):
 
 def excluded(relative: str) -> bool:
     parts = Path(relative).parts
-    return (relative == MANIFEST_NAME or ".git" in parts or
+    return (relative == MANIFEST_NAME or ".git" in parts or (parts[:1] == (STATE_DIR,)) or
             any(p in CACHE_NAMES for p in parts) or relative.endswith((".pyc", ".pyo")))
 
 

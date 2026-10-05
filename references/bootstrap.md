@@ -39,6 +39,7 @@
 - `schema_version`: 정수 `1`. `project_name`: 비어 있지 않은 수신 프로젝트 식별 문자열.
 - `wiki_dir`: `__llm-wiki` 또는 `__llm_wiki`만 선택. 자동 rename 없음.
 - `source_roots`: 하나 이상의 프로젝트 상대 파일/디렉터리. 프로젝트 전체를 뜻하는 `.`는 명시적으로 그 범위를 합의한 경우에만 사용한다. `excluded_roots`: 제외할 프로젝트 상대 경로 목록이며 빈 목록도 의도적으로 명시한다.
+- `source_suffixes`(선택): 디렉터리 원천에서 수집할 확장자 목록(예: `[".md"]`). 대소문자를 무시하며 생략하면 기존처럼 모든 일반 파일을 수집한다. 빈 목록·다중 점·공백·casefold 중복은 거부한다. 명시 파일 root가 목록 밖이면 조용히 제외하지 않고 계약을 거부한다. 필터로 제외한 파일은 본문을 열거나 source snapshot/registry에 등록하지 않는다. visible symlink 거부는 필터보다 먼저다.
 - `authority_rules`: `pattern`, `document_type`, 정수 `authority_rank`, `role`을 가진 규칙 목록. 빈 목록을 합의하면 모든 문서는 명시 `fallback`을 사용한다.
 - `fallback`: `document_type`, 정수 `authority_rank`, `role`을 모두 명시. 모호한 default를 숨기지 않는다.
 - `copy_policy`: `path_reference`만 지원. 원문 본문 복사를 승인하는 값은 아니다.

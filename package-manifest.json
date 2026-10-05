@@ -1,6 +1,8 @@
 {
   "directories": [
     "assets",
+    "docs",
+    "docs/response",
     "references",
     "scripts",
     "tests"
@@ -9,7 +11,7 @@
     "scripts/wiki_desk.py",
     "scripts/package_manifest.py"
   ],
-  "file_count": 26,
+  "file_count": 33,
   "files": [
     {
       "executable": false,
@@ -20,8 +22,8 @@
     {
       "executable": false,
       "path": ".gitignore",
-      "sha256": "72b73433b3a9cf72a74989690334ee50c0c696868ddb5a0c690757194b53fe9d",
-      "size": 322
+      "sha256": "8d872e1e0c6145c350b0749f0354b87683e733e81911e39cef2b46fc9c854262",
+      "size": 591
     },
     {
       "executable": false,
@@ -32,19 +34,19 @@
     {
       "executable": false,
       "path": "README.md",
-      "sha256": "1ba4876d259ddd27bb5a7e8a168132d29b01a9e672f5aaf9cd06445e13af8ae5",
-      "size": 11419
+      "sha256": "899675ca62afd317d7102de4ba40406c2b6f15b93e7be63a5e4b74d7d61ef335",
+      "size": 17149
     },
     {
       "executable": false,
       "path": "SKILL.md",
-      "sha256": "77bc92791abc8c92ae7fbc224358d56c516b248cf709aa6cadf88c4197fb6de9",
-      "size": 8063
+      "sha256": "7f664177886d798ee138e062bb8c838fe37f6e2378e5c54a11a214ef1875cabc",
+      "size": 8459
     },
     {
       "executable": false,
       "path": "VERSION",
-      "sha256": "59854984853104df5c353e2f681a15fc7924742f9a2e468c29af248dce45ce03",
+      "sha256": "1575e1af4a95f12f70b4ee6a6adce8160953d93ea17dc2611b90883ccc3ad3b8",
       "size": 6
     },
     {
@@ -56,8 +58,14 @@
     {
       "executable": false,
       "path": "assets/project-contract.schema.json",
-      "sha256": "8c102bf1533e97b04f2a9baf42da210aadab6a3e3350591ab04324694d142992",
-      "size": 4707
+      "sha256": "3e77dcce22233aae9ee34e62e073ff9121ccfd74ce3ce276e1818a3499e921a5",
+      "size": 5270
+    },
+    {
+      "executable": false,
+      "path": "docs/response/response_26100514_위키데스크_개선요청_항목별회신.md",
+      "sha256": "267e4ce06e290c16b834377ef4b828ccd85430f10f6b4501e671cb32b3832f44",
+      "size": 10716
     },
     {
       "executable": false,
@@ -68,8 +76,8 @@
     {
       "executable": false,
       "path": "references/bootstrap.md",
-      "sha256": "4856beb9006578793d3676a8093c01df8bf541f17e8497a08ae9467d95959c8a",
-      "size": 5874
+      "sha256": "20eddc6c48316171088d9640f0e9297f45fd10524729aa10dadeb989ebe52297",
+      "size": 6376
     },
     {
       "executable": false,
@@ -80,20 +88,20 @@
     {
       "executable": false,
       "path": "references/installation.md",
-      "sha256": "6d3964896888179b9ce5654d15bcdf5a848d47755f52f328d8b48342d3694bf2",
-      "size": 8703
+      "sha256": "abe892dcbde3339c192c6ce7f6c85c3e08ca362ce33d4d0eb7affbdbefefc697",
+      "size": 10415
     },
     {
       "executable": false,
       "path": "references/maintenance.md",
-      "sha256": "207d74ce5692d93697df14f6705927ab62a5a5049efd85dc57a2ccd6f795a75d",
-      "size": 5666
+      "sha256": "88be6ca9825c9d778f403c4817cd68763b87002f011b3f13440d3f818c528a8b",
+      "size": 11885
     },
     {
       "executable": false,
       "path": "references/okf.md",
-      "sha256": "c1f417af1b3b84431d375d6b7172793777d241148fe56697e9f85c9107a1db51",
-      "size": 6291
+      "sha256": "2323ac4a1a6be8afbbb203def8752907bda6555fdf063e3456a2c4b773d35218",
+      "size": 6402
     },
     {
       "executable": false,
@@ -104,8 +112,8 @@
     {
       "executable": false,
       "path": "requirements.txt",
-      "sha256": "677a936534e6b07e859972ad3de306beb92f73e4d6086725c44f694e8b56041f",
-      "size": 143
+      "sha256": "45b3e47b9f3e8f659bbc2387cfa343898209280483af3419eb2165334606af0b",
+      "size": 192
     },
     {
       "executable": false,
@@ -122,26 +130,38 @@
     {
       "executable": false,
       "path": "scripts/package_manifest.py",
-      "sha256": "22b100aa0cf417d2f802b81f8c06bfa854a249ab7fa66b3a80cd4f3988861c45",
-      "size": 5357
+      "sha256": "f21d7b15c71c77648cacd2f5d1dffc341627c7d85de1cf60daebdaa989279b54",
+      "size": 5837
     },
     {
       "executable": false,
       "path": "scripts/wiki_desk.py",
-      "sha256": "dbed66af753c0644c73e1bcf8204b9536b357ac26ed7dd8a01aa33c5a794c8f1",
-      "size": 41801
+      "sha256": "c69090e7804fdb3058f35c7e04d0497dd6614f49bb8abd921eaad046e2fb2c6b",
+      "size": 61207
     },
     {
       "executable": false,
       "path": "scripts/wiki_runtime.py",
-      "sha256": "b25d8166aa8c55b4d279dab9bb50a330284e20ded874de23110a6c05f42f8bb5",
-      "size": 39644
+      "sha256": "3bd7205f07e6c9bddca7df6bf983f632b35b0e447298c4b75083eba3aab3045c",
+      "size": 48760
+    },
+    {
+      "executable": false,
+      "path": "tests/__init__.py",
+      "sha256": "9e704c5c7515b5f8e9070f3fdb6652b1261b8b6705d4a43c6d8de756de7242f5",
+      "size": 70
     },
     {
       "executable": false,
       "path": "tests/test_lifecycle.py",
-      "sha256": "b17f9a0023ad764391357e8ed9b63db99dad2682d09ea3ed79b1894be25945dd",
-      "size": 41863
+      "sha256": "acbe288b1c736e7390e6cba557aae73f2fdbf21c8bb23b725cdc32c8c603c1e8",
+      "size": 42093
+    },
+    {
+      "executable": false,
+      "path": "tests/test_lifecycle_extensions.py",
+      "sha256": "2d6410a3be21d7c762f8709453183c6ca48e645a3d65f15fe288c3d009afd549",
+      "size": 13626
     },
     {
       "executable": false,
@@ -151,21 +171,45 @@
     },
     {
       "executable": false,
+      "path": "tests/test_portability.py",
+      "sha256": "8b67aa2511c21b1255984817bb6e33db48ef714142ff1503898d6112dc8a2e7a",
+      "size": 1540
+    },
+    {
+      "executable": false,
       "path": "tests/test_privacy_policy.py",
       "sha256": "ca93363b8356d1d3b1ffd6d25443c611d0ff0d283441806cc085b17bbff09377",
       "size": 4151
     },
     {
       "executable": false,
+      "path": "tests/test_reconciliation.py",
+      "sha256": "d819f97ec4492547d05c7e0e1b270976514166c0ba94a58eb81e68f7f17e7552",
+      "size": 13112
+    },
+    {
+      "executable": false,
       "path": "tests/test_release_safety.py",
-      "sha256": "fd602712d5d2f91ffa10085fa4802ca12b9555ec51a26c38f622d3225b760515",
-      "size": 19100
+      "sha256": "e30b2f7498f51e14529babaa6f17eae21b73d0d5425b94a8f0165d91b3008e20",
+      "size": 19148
     },
     {
       "executable": false,
       "path": "tests/test_runtime.py",
-      "sha256": "b3eae0a3914d1903390ee0811b4e7067682fdff18b280b8a65bc4844817d21da",
-      "size": 26850
+      "sha256": "1b2b530496ef700a54c15da1c3ad1f49ed84f226fb07c4085a784a6d4e60ec59",
+      "size": 27260
+    },
+    {
+      "executable": false,
+      "path": "tests/test_source_suffixes.py",
+      "sha256": "dcb566fd029c4c92c6417053843f18d749052227d1d5fed243240ea2aee3ad66",
+      "size": 10689
+    },
+    {
+      "executable": false,
+      "path": "tests/test_state_layout.py",
+      "sha256": "c6aff44ebb031ed9598b63e654ec161bd4768dcf144a47de38b86c19e332b7cd",
+      "size": 3787
     }
   ],
   "schema_version": 1

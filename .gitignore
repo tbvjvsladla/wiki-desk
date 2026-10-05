@@ -13,6 +13,9 @@ venv/
 *.pem
 *.key
 
-# 대상 적용 receipt/계약과 로컬 도구 cache는 배포 source가 아님
+# 설치된 스킬의 운영 상태(project/) 중 receipt 는 기계별 lifecycle 기록이라 추적하지 않는다.
+# project/contract.json 은 수신 프로젝트의 합의 계약이므로 수신 프로젝트가 추적한다.
+# 1.0.x 의 프로젝트 루트 .wiki-desk/ 는 더 이상 만들지 않는다(legacy 는 거부).
+project/receipt.json
 .wiki-desk/
 .cache/

@@ -46,6 +46,16 @@
         "$ref": "#/$defs/relativePath"
       }
     },
+    "source_suffixes": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^\\.[A-Za-z0-9]+$"
+      },
+      "description": "선택. 지정한 확장자(대소문자 무시)의 파일만 원문으로 수집한다. 필터링된 파일은 열지 않고 source snapshot과 registry에서 제외한다. 명시한 파일 root가 목록 밖이면 거부한다. 키가 없으면 모든 일반 파일을 수집한다. 대소문자만 다른 중복은 runtime에서 거부한다."
+    },
     "authority_rules": {
       "type": "array",
       "items": {

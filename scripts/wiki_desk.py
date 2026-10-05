@@ -1,6 +1,6 @@
 """Portable wiki-desk CLI: local plans, explicit apply, scoped transactions.
 
-The nine public actions never edit host/profile/context files. There is no
+The public actions never edit host/profile/context files. There is no
 serialized-plan apply command. PreparedPlan is an in-process capability sealed
 against payload/object tampering; validation re-runs the trusted builder before
 any mutation. Single-writer operation is required. Whole-process-crash atomicity
@@ -18,6 +18,7 @@ from datetime import datetime, timezone
 import hashlib
 import importlib
 import json
+import os
 from pathlib import Path, PurePosixPath
 from typing import Callable, NoReturn
 import weakref
@@ -27,13 +28,51 @@ from fs_safety import (Node, SafetyError, Snapshot, Transaction, Write,
                        safe_relative, snapshot, verify_snapshot)
 import package_manifest
 
-ADMIN = ".wiki-desk"
-CONTRACT = ADMIN + "/contract.json"
-RECEIPT = ADMIN + "/receipt.json"
+# 1.0.x kept a project-root .wiki-desk/. Since 1.1 the operating state (project
+# contract + lifecycle receipt) lives inside the installed skill, <skill>/project/,
+# which the package inventory excludes. A leftover root admin dir is refused,
+# never silently ignored, so two operating states can never disagree.
+LEGACY_ADMIN = ".wiki-desk"
+STATE = package_manifest.STATE_DIR
 HOSTS = {"hermes": ".agents/skills/wiki-desk", "codex": ".agents/skills/wiki-desk",
          "claude": ".claude/skills/wiki-desk"}
-RESERVED = frozenset((".git", ".hermes", ".agents", ".claude", ADMIN,
+RESERVED = frozenset((".git", ".hermes", ".agents", ".claude", LEGACY_ADMIN,
                       "HERMES.md", "AGENTS.md", "CLAUDE.md"))
+
+
+def state_rel(skill: str) -> str:
+    return skill + "/" + STATE
+
+
+def contract_rel(skill: str) -> str:
+    return state_rel(skill) + "/contract.json"
+
+
+def receipt_rel(skill: str) -> str:
+    return state_rel(skill) + "/receipt.json"
+
+
+def _refuse_legacy(root: Path) -> None:
+    if node(root, LEGACY_ADMIN).kind != "missing":
+        raise SafetyError("Legacy 1.0.x root .wiki-desk/ present; migrate it first "
+                          "(references/maintenance.md) — refusing a second operating state")
+
+
+def _installed_skill(root: Path) -> str:
+    """Skill dir whose operating state this invocation manages.
+
+    An installed copy manages itself. A source-package run must find exactly one
+    installed state among the host destinations; zero or several are refused."""
+    _refuse_legacy(root)
+    here = Path(os.path.abspath(__file__)).parent.parent
+    candidates = sorted(set(HOSTS.values()))
+    for rel in candidates:
+        if Path(os.path.abspath(root / rel)) == here:
+            return rel
+    found = [rel for rel in candidates if node(root, contract_rel(rel)).kind == "file"]
+    if len(found) != 1:
+        raise SafetyError(f"Expected exactly one installed wiki-desk state among {candidates}; found {found}")
+    return found[0]
 
 
 def json_bytes(value: object) -> bytes:
@@ -72,8 +111,8 @@ def _external_file(path: Path) -> tuple[bytes, Snapshot]:
     return data, snapshot(root, (absolute.name,))
 
 
-def _contract(root: Path) -> dict:
-    raw = _json(read_regular(root, CONTRACT))
+def _contract(root: Path, skill: str) -> dict:
+    raw = _json(read_regular(root, contract_rel(skill)))
     # Use the new planned API only; no private-wiki repository APIs.
     return _runtime().validate_contract(raw, root)
 
@@ -85,7 +124,7 @@ def _layout(root: Path, contract: dict, host: str) -> tuple[str, str]:
     if any(part in RESERVED for part in PurePosixPath(wiki).parts):
         raise SafetyError("Wiki may not occupy host/admin/context paths")
     skill = HOSTS[host]
-    for rel in (wiki, skill, ADMIN):
+    for rel in (wiki, skill):
         safe_path(root, rel)
     return wiki, skill
 
@@ -112,11 +151,19 @@ def _verify_source_snapshot(expected: Snapshot, contract: dict) -> None:
 
 
 def _baseline(root: Path, wiki: str, skill: str) -> Snapshot:
-    return snapshot(root, (wiki, skill, ADMIN))
+    return snapshot(root, (wiki, skill))
 
 
 def _file_record(data: bytes, mode: int) -> dict:
     return {"sha256": hashlib.sha256(data).hexdigest(), "size": len(data), "mode": mode}
+
+
+def _owned_matches(actual: Node, record: dict) -> bool:
+    # Ownership follows Git's portable content/executable semantics. Transaction
+    # snapshots/readback still compare every permission bit exactly.
+    return (actual.kind == "file" and actual.sha256 == record["sha256"]
+            and actual.size == record["size"]
+            and bool(actual.mode & 0o111) == bool(record["mode"] & 0o111))
 
 
 def _preimage(root: Path, rel: str) -> dict:
@@ -154,8 +201,7 @@ def _update_receipt(root: Path, receipt: dict, writes: tuple[Write, ...],
     # diverge from our last receipt, normalization must not launder them into
     # future deletion permission, even when the first preimage was missing.
     for rel, record in owned.items():
-        expected = Node("file", record["mode"], record["sha256"], record["size"])
-        if node(root, rel) != expected:
+        if not _owned_matches(node(root, rel), record):
             record["protected_user_content"] = True
     for write in writes:
         previous = owned.get(write.path, {})
@@ -165,7 +211,7 @@ def _update_receipt(root: Path, receipt: dict, writes: tuple[Write, ...],
         protected = previous.get("protected_user_content", False) or first["kind"] == "file"
         owned[write.path] = {**_file_record(write.data, write.mode), "preimage": first,
                              "protected_user_content": protected}
-    directories = _parents([w.path for w in writes] + [RECEIPT]) | set(explicit_dirs)
+    directories = _parents([w.path for w in writes] + [receipt_rel(value["skill_dir"])]) | set(explicit_dirs)
     created = value.setdefault("created_dirs", {})
     for rel in sorted(directories):
         if node(root, rel).kind == "missing":
@@ -173,24 +219,26 @@ def _update_receipt(root: Path, receipt: dict, writes: tuple[Write, ...],
     return value
 
 
-def _read_receipt(root: Path) -> dict:
-    value = _json(read_regular(root, RECEIPT))
+def _read_receipt(root: Path, skill: str, *, legacy: bool = False) -> dict:
+    contract_path = LEGACY_ADMIN + "/contract.json" if legacy else contract_rel(skill)
+    receipt_path = LEGACY_ADMIN + "/receipt.json" if legacy else receipt_rel(skill)
+    value = _json(read_regular(root, receipt_path))
     if value.get("schema_version") != 1 or value.get("host") not in HOSTS:
         raise SafetyError("Invalid lifecycle receipt")
-    contract = _json(read_regular(root, CONTRACT))
-    wiki, skill = _layout(root, contract, value["host"])
-    if value.get("wiki_dir") != wiki or value.get("skill_dir") != skill:
+    contract = _json(read_regular(root, contract_path))
+    wiki, layout_skill = _layout(root, contract, value["host"])
+    if value.get("wiki_dir") != wiki or value.get("skill_dir") != layout_skill or layout_skill != skill:
         raise SafetyError("Receipt layout differs from local contract/host")
-    if value.get("contract_sha256") != hashlib.sha256(read_regular(root, CONTRACT)).hexdigest():
+    if value.get("contract_sha256") != hashlib.sha256(read_regular(root, contract_path)).hexdigest():
         raise SafetyError("Local contract differs from receipt")
     owned = value.get("owned_files")
     created = value.get("created_dirs")
     if not isinstance(owned, dict) or not isinstance(created, dict):
         raise SafetyError("Invalid receipt ownership records")
-    ancestors = _parents([wiki + "/_", skill + "/_", RECEIPT])
+    ancestors = _parents([wiki + "/_", skill + "/_", receipt_path])
     for rel, record in owned.items():
         safe_relative(rel)
-        if not (rel == CONTRACT or _under(rel, wiki) or _under(rel, skill)) or rel in (wiki, skill):
+        if not (rel == contract_path or _under(rel, wiki) or _under(rel, skill)) or rel in (wiki, skill, receipt_path):
             raise SafetyError(f"Receipt ownership escapes managed scope: {rel}")
         if (not isinstance(record, dict) or not isinstance(record.get("sha256"), str)
                 or len(record["sha256"]) != 64 or type(record.get("size")) is not int
@@ -207,7 +255,7 @@ def _read_receipt(root: Path) -> dict:
                 raise SafetyError("Invalid preimage mode")
     for rel, mode in created.items():
         safe_relative(rel)
-        if rel not in ancestors and not (_under(rel, wiki) or _under(rel, skill) or rel == ADMIN):
+        if rel not in ancestors and not (_under(rel, wiki) or _under(rel, skill)):
             raise SafetyError("Receipt directory escapes managed scope")
         if mode != 0o755:
             raise SafetyError("Invalid created-directory mode")
@@ -218,8 +266,7 @@ def _owned_drift(root: Path, receipt: dict) -> list[str]:
     changed = []
     for rel, record in receipt["owned_files"].items():
         actual = node(root, rel)
-        expected = Node("file", record["mode"], record["sha256"], record["size"])
-        if actual != expected:
+        if not _owned_matches(actual, record):
             changed.append(rel)
     return sorted(changed)
 
@@ -308,8 +355,9 @@ def prepare_install(root: Path, host: str, contract_path: Path,
         raw, contract_guard = _external_file(contract_path)
         contract = _runtime().validate_contract(_json(raw), root)
         wiki, skill = _layout(root, contract, host)
+        _refuse_legacy(root)
         # Source package must never overlap a managed destination.
-        for rel in (wiki, skill, ADMIN):
+        for rel in (wiki, skill):
             target = root / rel
             if package == target or target in package.parents or package in target.parents:
                 raise SafetyError("Source-package/destination overlap")
@@ -318,12 +366,12 @@ def prepare_install(root: Path, host: str, contract_path: Path,
         baseline = _baseline(root, wiki, skill)
         sources = _source_snapshot(root, contract)
         normalized = json_bytes(contract)
-        existing = node(root, RECEIPT).kind == "file"
+        existing = node(root, receipt_rel(skill)).kind == "file"
         if existing:
-            receipt = _read_receipt(root)
+            receipt = _read_receipt(root, skill)
             if receipt["host"] != host or receipt.get("skill_removed"):
                 raise SafetyError("Existing installation has different host or was removed")
-            if (read_regular(root, CONTRACT) != normalized or
+            if (read_regular(root, contract_rel(skill)) != normalized or
                     receipt.get("package_manifest_sha256") != verified["manifest_sha256"]):
                 raise SafetyError("Reinstall is byte-parity only; contract/package changed")
             drift = _owned_drift(root, receipt)
@@ -338,7 +386,7 @@ def prepare_install(root: Path, host: str, contract_path: Path,
             return PreparedPlan("install", tx, (contract_guard, package_guard, sources),
                                 _plan_report("install", tx, idempotent=True, host=host, wiki_dir=wiki, skill_dir=skill),
                                 source_contract=json_bytes(contract))
-        if any(node(root, rel).kind != "missing" for rel in (wiki, skill, ADMIN)):
+        if any(node(root, rel).kind != "missing" for rel in (wiki, skill)):
             raise SafetyError("Fresh install refuses existing wiki/skill/admin destination collisions")
         outputs = _runtime().scaffold_files(root, contract, now=stamp)
         writes = list(_payload(outputs, wiki))
@@ -348,7 +396,7 @@ def prepare_install(root: Path, host: str, contract_path: Path,
             rel = record["path"]
             mode = 0o755 if record["executable"] else 0o644
             writes.append(Write(skill + "/" + rel, read_regular(package, rel), mode))
-        writes.append(Write(CONTRACT, normalized))
+        writes.append(Write(contract_rel(skill), normalized))
         explicit_dirs = tuple(skill + "/" + rel for rel in verified["inventory"]["directories"])
         receipt = {"schema_version": 1, "host": host, "wiki_dir": wiki, "skill_dir": skill,
                    "contract_sha256": hashlib.sha256(normalized).hexdigest(),
@@ -356,7 +404,7 @@ def prepare_install(root: Path, host: str, contract_path: Path,
                    "skill_removed": False, "single_writer_required": True,
                    "process_crash_atomic": False, "semantic_approval_verified": False}
         receipt = _update_receipt(root, receipt, tuple(writes), explicit_dirs)
-        writes.append(Write(RECEIPT, json_bytes(receipt)))
+        writes.append(Write(receipt_rel(skill), json_bytes(receipt)))
         tx = Transaction(root, baseline, tuple(sorted(writes, key=lambda w: w.path)),
                          mkdirs=tuple(sorted(receipt["created_dirs"].items())))
         tx.preflight()
@@ -365,7 +413,7 @@ def prepare_install(root: Path, host: str, contract_path: Path,
                                          package_files=verified["file_count"] + 1), source_contract=json_bytes(contract))
 
     def readback() -> None:
-        receipt = _read_receipt(root)
+        receipt = _read_receipt(root, HOSTS[host])
         if _owned_drift(root, receipt):
             raise SafetyError("Installed owned-file readback mismatch")
         package_manifest.verify(root / receipt["skill_dir"])
@@ -384,9 +432,214 @@ def _manifest_record(package: Path) -> dict:
             "sha256": hashlib.sha256(data).hexdigest(), "executable": False}
 
 
+def _new_receipt(host: str, wiki: str, skill: str, raw: bytes, verified: dict) -> dict:
+    return {"schema_version": 1, "host": host, "wiki_dir": wiki, "skill_dir": skill,
+            "contract_sha256": hashlib.sha256(raw).hexdigest(),
+            "package_manifest_sha256": verified["manifest_sha256"],
+            "skill_removed": False, "single_writer_required": True,
+            "process_crash_atomic": False, "semantic_approval_verified": False}
+
+
+def _package_writes(package: Path, skill: str, verified: dict) -> tuple[Write, ...]:
+    return tuple(Write(skill + "/" + row["path"], read_regular(package, row["path"]),
+                       0o755 if row["executable"] else 0o644)
+                 for row in verified["inventory"]["files"] + [_manifest_record(package)])
+
+
+def _register_existing(root: Path, receipt: dict, paths: tuple[str, ...], *, protected: bool) -> dict:
+    for rel in paths:
+        current = node(root, rel)
+        if current.kind != "file":
+            raise SafetyError(f"Expected existing regular file: {rel}")
+        receipt.setdefault("owned_files", {})[rel] = {
+            **_file_record(read_regular(root, rel), current.mode),
+            "preimage": _preimage(root, rel), "protected_user_content": protected}
+    return receipt
+
+
+def _lifecycle_readback(root: Path, skill: str) -> None:
+    receipt = _read_receipt(root, skill)
+    if _owned_drift(root, receipt):
+        raise SafetyError("Lifecycle owned-file readback mismatch")
+    package_manifest.verify(root / skill)
+
+
+def prepare_rebuild(root: Path, host: str, *, now: str | None = None) -> PreparedPlan:
+    """Restore untracked wiki/receipt without rewriting a tracked checkout."""
+    root = canonical_root(root)
+    if host not in HOSTS:
+        raise SafetyError("Unsupported host adapter")
+    skill = HOSTS[host]
+    stamp = now or datetime.now(timezone.utc).isoformat()
+
+    def build() -> PreparedPlan:
+        _refuse_legacy(root)
+        raw = read_regular(root, contract_rel(skill))
+        contract = _runtime().validate_contract(_json(raw), root)
+        wiki, _ = _layout(root, contract, host)
+        if set(node(root, state_rel(skill)).children) != {"contract.json"}:
+            raise SafetyError("Rebuild requires contract-only operating state")
+        if node(root, receipt_rel(skill)).kind != "missing" or node(root, wiki).kind != "missing":
+            raise SafetyError("Rebuild requires absent receipt and wiki")
+        verified = package_manifest.verify(root / skill)
+        baseline = _baseline(root, wiki, skill)
+        sources = _source_snapshot(root, contract)
+        writes = _payload(_runtime().scaffold_files(root, contract, now=stamp), wiki)
+        if not writes:
+            raise SafetyError("Empty runtime scaffold")
+        receipt = _new_receipt(host, wiki, skill, raw, verified)
+        # Existing verified package and contract are not new deletion authority.
+        paths = tuple(w.path for w in _package_writes(root / skill, skill, verified)) + (contract_rel(skill),)
+        _register_existing(root, receipt, paths, protected=False)
+        receipt = _update_receipt(root, receipt, writes)
+        tx = Transaction(root, baseline, writes + (Write(receipt_rel(skill), json_bytes(receipt)),),
+                         mkdirs=tuple(sorted(receipt["created_dirs"].items())))
+        tx.preflight()
+        return PreparedPlan("rebuild", tx, (sources,), _plan_report("rebuild", tx, host=host,
+                            wiki_dir=wiki, skill_dir=skill, tracked_package_preserved=True),
+                            source_contract=json_bytes(contract))
+    return _prepare(build, lambda: _lifecycle_readback(root, skill))
+
+
+def prepare_adopt(root: Path, host: str, contract_path: Path, package: Path | None = None) -> PreparedPlan:
+    """Register an arbitrary existing wiki without normalizing any of its bytes."""
+    root = canonical_root(root)
+    package = canonical_root(package or Path(__file__).absolute().parent.parent)
+
+    def build() -> PreparedPlan:
+        _refuse_legacy(root)
+        raw, contract_guard = _external_file(contract_path)
+        contract = _runtime().validate_contract(_json(raw), root)
+        wiki, skill = _layout(root, contract, host)
+        if node(root, wiki).kind != "dir" or node(root, receipt_rel(skill)).kind != "missing":
+            raise SafetyError("Adopt requires existing wiki directory and absent receipt")
+        target = root / skill
+        if package == root / wiki or root / wiki in package.parents or package in (root / wiki).parents:
+            raise SafetyError("Source-package/wiki overlap")
+        # Equality is intentional for adopting a verified existing install.
+        # Proper overlap would write into (or over) the source distribution.
+        if target in package.parents or package in target.parents:
+            raise SafetyError("Source-package/destination overlap")
+        verified = package_manifest.verify(package)
+        package_guard = snapshot(package, (".",), excludes=_package_exclusions(package))
+        baseline = _baseline(root, wiki, skill)
+        writes: tuple[Write, ...] = ()
+        receipt = _new_receipt(host, wiki, skill, raw, verified)
+        directories = tuple(skill + "/" + rel for rel in verified["inventory"]["directories"])
+        if node(root, skill).kind == "missing":
+            writes = _package_writes(package, skill, verified)
+        elif node(root, skill).kind == "dir":
+            existing = package_manifest.verify(target)
+            if existing["manifest_sha256"] != verified["manifest_sha256"]:
+                raise SafetyError("Adopt refuses nonmatching installed package")
+            _register_existing(root, receipt, tuple(w.path for w in _package_writes(target, skill, existing)), protected=False)
+            state = node(root, state_rel(skill))
+            if state.kind == "dir" and set(state.children) - {"contract.json"}:
+                raise SafetyError("Adopt refuses colliding/extra operating state")
+        else:
+            raise SafetyError("Adopt skill destination collision")
+        if node(root, contract_rel(skill)).kind == "missing":
+            writes += (Write(contract_rel(skill), raw),)
+        elif read_regular(root, contract_rel(skill)) == raw:
+            _register_existing(root, receipt, (contract_rel(skill),), protected=False)
+        else:
+            raise SafetyError("Adopt contract collision")
+        wiki_files = tuple(rel for rel, state in baseline.entries if _under(rel, wiki) and state.kind == "file")
+        _register_existing(root, receipt, wiki_files, protected=True)
+        receipt = _update_receipt(root, receipt, writes, directories)
+        tx = Transaction(root, baseline, writes + (Write(receipt_rel(skill), json_bytes(receipt)),),
+                         mkdirs=tuple(sorted(receipt["created_dirs"].items())))
+        tx.preflight()
+        return PreparedPlan("adopt", tx, (contract_guard, package_guard),
+                            _plan_report("adopt", tx, host=host, wiki_dir=wiki, skill_dir=skill,
+                                         wiki_preserved=True, protected_wiki_files=list(wiki_files)))
+    return _prepare(build, lambda: _lifecycle_readback(root, HOSTS[host]))
+
+
+def prepare_migrate_state(root: Path, host: str, package: Path | None = None) -> PreparedPlan:
+    """Verified 1.0 package upgrade + state move; no wiki mutations/reinstall."""
+    root = canonical_root(root)
+    package = canonical_root(package or Path(__file__).absolute().parent.parent)
+    if host not in HOSTS:
+        raise SafetyError("Unsupported host adapter")
+    skill = HOSTS[host]
+
+    def build() -> PreparedPlan:
+        legacy_contract = LEGACY_ADMIN + "/contract.json"
+        legacy_receipt = LEGACY_ADMIN + "/receipt.json"
+        if node(root, LEGACY_ADMIN).kind != "dir" or set(node(root, LEGACY_ADMIN).children) != {"contract.json", "receipt.json"}:
+            raise SafetyError("Migration requires exact legacy admin contract/receipt; extra paths refused")
+        if node(root, state_rel(skill)).kind != "missing":
+            raise SafetyError("Migration operating-state collision")
+        old = _read_receipt(root, skill, legacy=True)
+        if old.get("skill_removed") or old["host"] != host:
+            raise SafetyError("Migration requires a live matching-host legacy installation")
+        raw = read_regular(root, legacy_contract)
+        contract = _runtime().validate_contract(_json(raw), root)
+        wiki, _ = _layout(root, contract, host)
+        if node(root, wiki).kind != "dir":
+            raise SafetyError("Migration requires existing wiki")
+        target = root / skill
+        if package == target or target in package.parents or package in target.parents:
+            raise SafetyError("Migration requires a separate current source package")
+        # Legacy closure predates added tests. Verify its entire original manifest,
+        # and bind that manifest to the old receipt, not the new closure list.
+        declared = _json(read_regular(target, package_manifest.MANIFEST_NAME))
+        actual = package_manifest.inventory(target)
+        old_hash = hashlib.sha256(read_regular(target, package_manifest.MANIFEST_NAME)).hexdigest()
+        if (declared != actual or old.get("package_manifest_sha256") != old_hash
+                or read_regular(target, "VERSION").strip() != b"1.0.0"):
+            raise SafetyError("Migration requires verified unchanged legacy 1.0.0 package")
+        package_paths = {skill + "/" + row["path"] for row in actual["files"]} | {skill + "/" + package_manifest.MANIFEST_NAME}
+        owned_package = {rel for rel in old["owned_files"] if _under(rel, skill)}
+        if owned_package != package_paths or any(not _owned_matches(node(root, rel), old["owned_files"][rel]) for rel in package_paths):
+            raise SafetyError("Migration refuses changed/incomplete legacy package ownership")
+        if any(old["owned_files"][rel].get("protected_user_content") for rel in package_paths):
+            raise SafetyError("Migration refuses protected legacy package content")
+        verified = package_manifest.verify(package)
+        package_guard = snapshot(package, (".",), excludes=_package_exclusions(package))
+        baseline = snapshot(root, (wiki, skill, LEGACY_ADMIN))
+        writes = _package_writes(package, skill, verified) + (Write(contract_rel(skill), raw, node(root, legacy_contract).mode),)
+        new_package = {w.path for w in writes if w.path != contract_rel(skill)}
+        obsolete = package_paths - new_package
+        # A removed old package file with an original user preimage must never be
+        # erased during upgrade. Refuse rather than silently discard that record.
+        if any(old["owned_files"][rel]["preimage"]["kind"] != "missing" for rel in obsolete):
+            raise SafetyError("Migration refuses obsolete package user preimages")
+        receipt = _json(json_bytes(old))
+        receipt["package_manifest_sha256"] = verified["manifest_sha256"]
+        receipt["owned_files"][contract_rel(skill)] = receipt["owned_files"].pop(legacy_contract)
+        receipt["created_dirs"].pop(LEGACY_ADMIN, None)
+        for rel in obsolete:
+            del receipt["owned_files"][rel]
+        # Mark live wiki drift sticky before moving state; do not normalize wiki.
+        # Contract moved records compare at the old location until update finishes.
+        contract_record = receipt["owned_files"].pop(contract_rel(skill))
+        receipt = _update_receipt(root, receipt, tuple(w for w in writes if w.path != contract_rel(skill)),
+                                  tuple(skill + "/" + rel for rel in verified["inventory"]["directories"]))
+        receipt["owned_files"][contract_rel(skill)] = contract_record
+        for rel in _parents([contract_rel(skill), receipt_rel(skill)]):
+            if node(root, rel).kind == "missing":
+                receipt["created_dirs"].setdefault(rel, 0o755)
+        tx = Transaction(root, baseline, writes + (Write(receipt_rel(skill), json_bytes(receipt)),),
+                         tuple(sorted(obsolete | {legacy_contract, legacy_receipt})), (LEGACY_ADMIN,),
+                         tuple(sorted((rel, mode) for rel, mode in receipt["created_dirs"].items()
+                                      if node(root, rel).kind == "missing")))
+        tx.preflight()
+        return PreparedPlan("migrate-state", tx, (package_guard,), _plan_report("migrate-state", tx,
+                            host=host, wiki_dir=wiki, skill_dir=skill, wiki_preserved=True,
+                            legacy_manifest_sha256=old_hash))
+    # Existing wiki drift is intentionally preserved; package and state readback
+    # remain verified, without claiming those user-edited wiki files are unchanged.
+    def readback() -> None:
+        _read_receipt(root, skill)
+        package_manifest.verify(root / skill)
+    return _prepare(build, readback)
+
+
 def status(root: Path) -> dict:
     root = canonical_root(root)
-    receipt = _read_receipt(root)
+    receipt = _read_receipt(root, _installed_skill(root))
     changed = _owned_drift(root, receipt)
     protected = sorted(rel for rel, record in receipt["owned_files"].items()
                        if record.get("protected_user_content", False))
@@ -419,11 +672,15 @@ def prepare_remove(root: Path, *, remove_unchanged_wiki: bool = False) -> Prepar
     root = canonical_root(root)
 
     def build() -> PreparedPlan:
-        receipt = _read_receipt(root)
+        receipt = _read_receipt(root, _installed_skill(root))
         wiki, skill = receipt["wiki_dir"], receipt["skill_dir"]
+        state = state_rel(skill)
+        # Plain remove keeps the operating state (contract + receipt) like it keeps the wiki.
+        def package_file(rel: str) -> bool:
+            return _under(rel, skill) and not _under(rel, state)
         protected = sorted(rel for rel, record in receipt["owned_files"].items()
                            if record.get("protected_user_content", False)
-                           and (remove_unchanged_wiki or _under(rel, skill)))
+                           and (remove_unchanged_wiki or package_file(rel)))
         if protected:
             raise SafetyError("Remove refuses protected user content without mutation: " + ", ".join(protected))
         baseline = _baseline(root, wiki, skill)
@@ -434,7 +691,7 @@ def prepare_remove(root: Path, *, remove_unchanged_wiki: bool = False) -> Prepar
             if node(root, rel).kind != "dir" or node(root, rel).mode != expected_mode:
                 raise SafetyError("Changed managed directory: " + rel)
         owned = receipt["owned_files"]
-        selected = {rel for rel in owned if _under(rel, skill)}
+        selected = {rel for rel in owned if package_file(rel)}
         writes: list[Write] = []
         if remove_unchanged_wiki:
             wiki_snapshot = snapshot(root, (wiki,)).as_dict()
@@ -447,13 +704,13 @@ def prepare_remove(root: Path, *, remove_unchanged_wiki: bool = False) -> Prepar
             if any(owned[rel]["preimage"]["kind"] != "missing" for rel in expected_wiki_files):
                 raise SafetyError("Full fresh inverse refuses user-file preimages")
             selected.update(expected_wiki_files)
-            selected.add(CONTRACT)
-            selected.add(RECEIPT)
+            selected.add(contract_rel(skill))
+            selected.add(receipt_rel(skill))
         elif not receipt.get("skill_removed"):
             retained = _json(json_bytes(receipt))
             retained["skill_removed"] = True
             retained["owned_files"] = {rel: record for rel, record in owned.items() if rel not in selected}
-            writes.append(Write(RECEIPT, json_bytes(retained)))
+            writes.append(Write(receipt_rel(skill), json_bytes(retained)))
         deletes = set()
         for rel in selected:
             preimage = owned.get(rel, {}).get("preimage", {"kind": "missing"})
@@ -462,12 +719,13 @@ def prepare_remove(root: Path, *, remove_unchanged_wiki: bool = False) -> Prepar
             else:
                 writes.append(Write(rel, base64.b64decode(preimage["bytes_base64"], validate=True), preimage["mode"]))
         candidates = {rel for rel in receipt["created_dirs"]
-                      if remove_unchanged_wiki or _under(rel, skill) or rel in _parents([skill])}
+                      if remove_unchanged_wiki or ((_under(rel, skill) and not _under(rel, state))
+                                                 or rel in _parents([skill]))}
         rmdirs = _removable_dirs(root, candidates, deletes)
         if not remove_unchanged_wiki and writes:
             retained = _json(writes[0].data)
             retained["created_dirs"] = {rel: mode for rel, mode in receipt["created_dirs"].items() if rel not in rmdirs}
-            writes[0] = Write(RECEIPT, json_bytes(retained))
+            writes[0] = Write(receipt_rel(skill), json_bytes(retained))
         tx = Transaction(root, baseline, tuple(writes), tuple(sorted(deletes)), rmdirs)
         tx.preflight()
         return PreparedPlan("remove", tx, (), _plan_report("remove", tx,
@@ -498,7 +756,9 @@ def _registry_preservation(core, before: str, after: str) -> dict:
 
 
 def _validated_runtime_outputs(root: Path, contract: dict, action: str, runtime,
-                               result: object, baseline: Snapshot, sources: Snapshot) -> dict:
+                               result: object, baseline: Snapshot, sources: Snapshot, *,
+                               accept_removed: tuple[str, ...] = (),
+                               relocations: tuple[tuple[str, str], ...] = (), now: str | None = None) -> dict:
     """Require native acceptance AND independently validate actual desired bytes.
 
     This gate runs before Write/receipt construction and again in the trusted
@@ -595,7 +855,17 @@ def _validated_runtime_outputs(root: Path, contract: dict, action: str, runtime,
             raise SafetyError("Actual registry output source coverage/hash mismatch")
         if rel in before:
             previous = _json(read_regular(root, rel))
-            if any(k not in registry or registry[k] != v for k, v in previous.items() if k != "sources"):
+            validator = getattr(runtime, "validate_registry_transition", None)
+            if callable(validator) or accept_removed or relocations:
+                if action != "sync":
+                    if accept_removed or relocations:
+                        raise SafetyError("Registry transitions require sync")
+                if not callable(validator):
+                    raise SafetyError("Runtime registry-transition validator API required")
+                if validator(previous, registry, accept_removed=accept_removed, relocations=relocations, now=now) is not True:
+                    raise SafetyError("Runtime registry-transition validation did not pass")
+                continue
+            if {k: v for k, v in previous.items() if k != "sources"} != {k: v for k, v in registry.items() if k != "sources"}:
                 raise SafetyError("Actual registry output loses producer metadata")
             indexed = {row['source_path']: row for row in records}
             owned_keys = {'source_path', 'sha256', 'title', 'document_type', 'authority_rank', 'role'}
@@ -608,21 +878,33 @@ def _validated_runtime_outputs(root: Path, contract: dict, action: str, runtime,
     return outputs
 
 
-def prepare_runtime_action(root: Path, action: str, *, now: str | None = None) -> PreparedPlan:
+def prepare_runtime_action(root: Path, action: str, *, now: str | None = None,
+                           accept_removed=(), relocations=()) -> PreparedPlan:
     root = canonical_root(root)
     if action not in ("sync", "format"):
         raise SafetyError("Unsupported runtime mutation action")
+    if isinstance(accept_removed, (str, bytes)) or isinstance(relocations, (str, bytes)):
+        raise SafetyError("Transition options require path sequences and literal pairs")
+    accept_removed = tuple(safe_relative(path) for path in accept_removed)
+    pairs = tuple(relocations)
+    if any(not isinstance(pair, (tuple, list)) or len(pair) != 2 for pair in pairs):
+        raise SafetyError("Relocations require literal (OLD, NEW) pairs")
+    relocations = tuple((safe_relative(old), safe_relative(new)) for old, new in pairs)
+    if action != "sync" and (accept_removed or relocations):
+        raise SafetyError("Transition options are sync-only")
     stamp = now or datetime.now(timezone.utc).isoformat()
 
     def build() -> PreparedPlan:
-        receipt = _read_receipt(root)
-        contract = _contract(root)
+        receipt = _read_receipt(root, _installed_skill(root))
         wiki, skill = receipt["wiki_dir"], receipt["skill_dir"]
+        contract = _contract(root, skill)
         baseline = _baseline(root, wiki, skill)
         sources = _source_snapshot(root, contract)
         runtime = _runtime()
-        result = getattr(runtime, action + "_plan")(root, contract, now=stamp)
-        outputs = _validated_runtime_outputs(root, contract, action, runtime, result, baseline, sources)
+        kwargs = {"accept_removed": accept_removed, "relocations": relocations} if action == "sync" and (accept_removed or relocations) else {}
+        result = getattr(runtime, action + "_plan")(root, contract, now=stamp, **kwargs)
+        outputs = _validated_runtime_outputs(root, contract, action, runtime, result, baseline, sources,
+                                             accept_removed=accept_removed, relocations=relocations, now=stamp)
         # Native baseline remains diagnostic; source inventory/report rows were
         # cross-checked against independent bytes. Rebuild the recipe at apply.
         writes = tuple(Write(write.path, write.data,
@@ -634,7 +916,7 @@ def prepare_runtime_action(root: Path, action: str, *, now: str | None = None) -
         mkdirs: tuple[tuple[str, int], ...] = ()
         updated = _update_receipt(root, receipt, changed)
         if changed or updated != receipt:
-            all_writes += (Write(RECEIPT, json_bytes(updated)),)
+            all_writes += (Write(receipt_rel(skill), json_bytes(updated)),)
             mkdirs = tuple(sorted((rel, mode) for rel, mode in updated["created_dirs"].items()
                                   if node(root, rel).kind == "missing"))
         tx = Transaction(root, baseline, tuple(sorted(all_writes, key=lambda w: w.path)), mkdirs=mkdirs)
@@ -645,15 +927,17 @@ def prepare_runtime_action(root: Path, action: str, *, now: str | None = None) -
         diagnostics = _public(diagnostics)
         return PreparedPlan(action, tx, (sources,), _plan_report(action, tx,
                             drift=bool(changed), changed_wiki_files=[w.path for w in changed],
-                            runtime_report=diagnostics, actual_source_snapshot_guarded=True),
+                            runtime_report=diagnostics, actual_source_snapshot_guarded=True,
+                            accept_removed=list(accept_removed), relocations=[list(pair) for pair in relocations]),
                             source_contract=json_bytes(contract))
 
     def readback() -> None:
         # Exact writes already verified by Transaction; each changed output is
         # also receipt-bound. Existing user changes outside outputs are allowed.
-        receipt = _read_receipt(root)
+        skill = _installed_skill(root)
+        receipt = _read_receipt(root, skill)
         for write in plan.transaction.writes:
-            if write.path != RECEIPT:
+            if write.path != receipt_rel(skill):
                 record = receipt["owned_files"].get(write.path)
                 if record is None or any(record.get(key) != value for key, value in _file_record(write.data, write.mode).items()):
                     raise SafetyError("Runtime output receipt readback mismatch")
@@ -687,11 +971,13 @@ def parser() -> argparse.ArgumentParser:
     result = _Parser(description=__doc__)
     sub = result.add_subparsers(dest="action", required=True, parser_class=_Parser)
     sub.add_parser("verify-package")
-    install = sub.add_parser("install")
-    install.add_argument("--root", type=Path, required=True)
-    install.add_argument("--host", choices=tuple(HOSTS), required=True)
-    install.add_argument("--contract", type=Path, required=True)
-    install.add_argument("--apply", action="store_true")
+    for action in ("install", "adopt", "rebuild", "migrate-state"):
+        install = sub.add_parser(action)
+        install.add_argument("--root", type=Path, required=True)
+        install.add_argument("--host", choices=tuple(HOSTS), required=True)
+        if action in ("install", "adopt"):
+            install.add_argument("--contract", type=Path, required=True)
+        install.add_argument("--apply", action="store_true")
     for action in ("status", "remove", "sync", "query", "format", "check", "scan"):
         command = sub.add_parser(action)
         command.add_argument("--root", type=Path, required=True)
@@ -704,6 +990,10 @@ def parser() -> argparse.ArgumentParser:
         if action == "query":
             command.add_argument("--terms", required=True)
             command.add_argument("--limit", type=int, default=10)
+            command.add_argument("--fail-on-empty", action="store_true")
+        if action == "sync":
+            command.add_argument("--accept-removed", action="append", default=[])
+            command.add_argument("--relocate", action="append", default=[])
         if action == "scan":
             command.add_argument("--contract", type=Path, required=True)
     return result
@@ -721,6 +1011,14 @@ def main(argv: list[str] | None = None) -> int:
         elif action == "install":
             plan = prepare_install(args.root, args.host, args.contract)
             result = apply_plan(plan) if args.apply else plan.report
+        elif action in ("adopt", "rebuild", "migrate-state"):
+            if action == "adopt":
+                plan = prepare_adopt(args.root, args.host, args.contract)
+            elif action == "rebuild":
+                plan = prepare_rebuild(args.root, args.host)
+            else:
+                plan = prepare_migrate_state(args.root, args.host)
+            result = apply_plan(plan) if args.apply else plan.report
         elif action == "status":
             result = status(args.root)
         elif action == "remove":
@@ -729,7 +1027,16 @@ def main(argv: list[str] | None = None) -> int:
         elif action in ("sync", "format"):
             if action == "format" and args.check and args.apply:
                 raise SafetyError("format --check cannot be combined with --apply")
-            plan = prepare_runtime_action(args.root, action)
+            options = {}
+            if action == "sync":
+                pairs = []
+                for value in args.relocate:
+                    if value.count("=") != 1:
+                        raise SafetyError("--relocate requires literal OLD=NEW")
+                    old, new = value.split("=")
+                    pairs.append((safe_relative(old), safe_relative(new)))
+                options = {"accept_removed": tuple(args.accept_removed), "relocations": tuple(pairs)}
+            plan = prepare_runtime_action(args.root, action, **options)
             result = apply_plan(plan) if args.apply else plan.report
             if action == "format" and args.check:
                 result = {**result, "check": True, "status": "DRIFT" if result["drift"] else "CONFORMANT"}
@@ -739,11 +1046,13 @@ def main(argv: list[str] | None = None) -> int:
             root = canonical_root(args.root)
             if args.limit <= 0:
                 raise SafetyError("Query limit must be positive")
-            result = _runtime().query(root, _contract(root), args.terms, limit=args.limit)
+            result = _runtime().query(root, _contract(root, _installed_skill(root)), args.terms, limit=args.limit)
             result = {**result, "action": action, "read_only": True, "writes": 0}
+            print(json.dumps(_public(result), ensure_ascii=False, sort_keys=True))
+            return 3 if args.fail_on_empty and result.get("matched_count") == 0 else 0
         elif action == "check":
             root = canonical_root(args.root)
-            result = _runtime().check_bundle(root, _contract(root))
+            result = _runtime().check_bundle(root, _contract(root, _installed_skill(root)))
             result = {**result, "action": action, "read_only": True, "writes": 0,
                       "semantic_approval_verified": False}
             print(json.dumps(_public(result), ensure_ascii=False, sort_keys=True))
@@ -757,14 +1066,18 @@ def main(argv: list[str] | None = None) -> int:
             raw, guard = _external_file(args.contract)
             contract = _runtime().validate_contract(_json(raw), root)
             sources = _source_snapshot(root, contract)
-            outputs = _payload(_runtime().scaffold_files(root, contract), contract["wiki_dir"])
+            wiki_state = node(root, contract["wiki_dir"])
+            if wiki_state.kind not in ("missing", "dir"):
+                raise SafetyError("Scan wiki destination is not a directory")
+            wiki_exists = wiki_state.kind == "dir"
+            outputs = () if wiki_exists else _payload(_runtime().scaffold_files(root, contract), contract["wiki_dir"])
             verify_snapshot(guard)
             _verify_source_snapshot(sources, contract)
             observed = [{"path": rel, "sha256": state.sha256, "size": state.size}
                         for rel, state in sources.entries if state.kind == "file"]
             result = {"action": action, "read_only": True, "writes": 0,
                       "source_files": observed, "source_count": len(observed),
-                      "scaffold_paths": [w.path for w in outputs], "originals_reviewed": False,
+                      "scaffold_paths": [w.path for w in outputs], "wiki_exists": wiki_exists, "originals_reviewed": False,
                       "semantic_approval_verified": False}
         else:
             raise SafetyError("Unsupported action")

@@ -6,7 +6,7 @@
 
 Python 3.10+와 `PyYAML>=6,<7`가 helper의 runtime prerequisite다. `requirements.txt`에는 runtime dependency만 있다. 전체 개발시험은 `unittest` 사례를 포함한 `pytest`이며 선택적 `requirements-dev.txt`로 분리한다. 누락되면 차단 사유를 보고하고 자동 `pip`/provider/도구 설치를 하지 않는다. Python helper는 host의 일반 명령 실행 도구·permission/sandbox 안에서 호출한다.
 
-source package root, 대상 project root, 설치 후 skill root, knowledge bundle root를 구별한다. remote/container backend이면 해당 실행 환경에서 실제 전체 폴더와 원문이 보이는지 확인한다. 경로 token을 모든 host의 공통 변수라고 가정하지 않는다. `.wiki-desk/contract.json`은 knowledge bundle 밖 target-local 운영 계약이다.
+source package root, 대상 project root, 설치 후 skill root, knowledge bundle root를 구별한다. remote/container backend이면 해당 실행 환경에서 실제 전체 폴더와 원문이 보이는지 확인한다. 경로 token을 모든 host의 공통 변수라고 가정하지 않는다. 설치된 스킬의 `project/contract.json`은 합의 계약이고 `project/receipt.json`은 기계별 소유권 기록이다. 둘 다 knowledge bundle 밖 target-local 운영 상태이며 패키지 인벤토리의 최상위 `project/` 제외 정책을 따른다. 계약은 수신 프로젝트가 추적하고 receipt는 추적하지 않는다. 새 설치는 프로젝트 루트 `.wiki-desk/`를 만들지 않는다.
 
 ## host별 project adapter
 
@@ -28,6 +28,9 @@ entrypoint는 전체 패키지의 `scripts/wiki_desk.py`다. 다음은 `wiki-des
 | source 조사 | `python3 wiki-desk/scripts/wiki_desk.py scan --root example-project --contract example-project/wiki-desk.contract.json` | 읽기 전용 |
 | 설치 계획 | `python3 wiki-desk/scripts/wiki_desk.py install --root example-project --host hermes --contract example-project/wiki-desk.contract.json` | 기본 plan, 대상 쓰기 없음 |
 | 설치 적용 | 위 명령에 `--apply` 추가 | 명시 승인 범위의 대상 쓰기 |
+| 추적 설치본 재생성 | `python3 -B wiki-desk/scripts/wiki_desk.py rebuild --root example-project --host hermes` | 기본 plan. manifest 일치 스킬·계약은 그대로 두고 없는 위키·receipt만 생성 |
+| 기존 위키 채택 | `python3 -B wiki-desk/scripts/wiki_desk.py adopt --root example-project --host hermes --contract example-project/wiki-desk.contract.json` | 기본 plan. 기존 위키 bytes/mode 보존·사용자 보호 등록 |
+| 1.0.0 상태 이관 | `python3 -B wiki-desk/scripts/wiki_desk.py migrate-state --root example-project --host hermes` | 기본 plan. 검증된 1.0.0 패키지 교체와 상태 이동, 위키 그대로 보존 |
 | 상태 | `python3 wiki-desk/scripts/wiki_desk.py status --root example-project` | 읽기 전용 |
 | 색인 계획 | `python3 wiki-desk/scripts/wiki_desk.py sync --root example-project` | 읽기 전용 plan |
 | 색인 적용 | 위 명령에 `--apply` 추가 | 명시 승인 범위의 metadata 쓰기 |
@@ -40,7 +43,9 @@ entrypoint는 전체 패키지의 `scripts/wiki_desk.py`다. 다음은 `wiki-des
 | 제거 적용 | 위 명령에 `--apply` 추가 | 소유권·변경 여부 검사 후 제거, wiki는 기본 보존 |
 | 관리 wiki까지 제거 | 기본 `remove` 명령에 `--apply --remove-unchanged-wiki` 추가 | 명시 승인 및 unchanged/receipt 조건을 만족하는 관리 wiki만 |
 
-`--host`는 `hermes`, `codex`, `claude` 중 명시한다. stdout은 JSON이고 진단·exit code도 함께 확인한다. `sync`/`query`/`format`/`check`는 대상의 `.wiki-desk/contract.json`을 읽는다. JSON plan을 외부에서 고쳐 적용하는 interface는 없다. 최신 입력으로 trusted plan을 생성하는 정상 CLI만 사용한다.
+`--host`는 `hermes`, `codex`, `claude` 중 명시한다. stdout은 JSON이고 진단·exit code도 함께 확인한다. `status`/`sync`/`query`/`format`/`check`/`remove`는 설치된 스킬의 `project/` 상태를 읽는다. 설치본에서 실행하면 자기 상태를 사용하고 source package에서 실행하면 host 목적지 중 계약이 있는 곳을 정확히 하나 찾아야 한다. 0개 또는 여러 개면 BLOCKED다. legacy 루트 `.wiki-desk/`가 있으면 일반 상태 명령과 설치를 거부하고 명시 이관을 요구한다. JSON plan을 외부에서 고쳐 적용하는 interface는 없다. 최신 입력으로 trusted plan을 생성하는 정상 CLI만 사용한다.
+
+`rebuild`/`adopt`/`migrate-state`도 기본 쓰기0 계획이며 합의한 범위에만 `--apply`를 붙인다. 상세 선행조건·사용자 보호·호환 한계는 [유지보수](maintenance.md)를 확인한다. install을 자동 updater로 쓰지 않으며 기존 파일을 지우고 재설치하는 우회를 기본 절차로 삼지 않는다.
 
 ## source 확인 → 대상 적용 → read-back
 
@@ -60,7 +65,7 @@ entrypoint는 전체 패키지의 `scripts/wiki_desk.py`다. 다음은 `wiki-des
 
 ```text
 프로젝트 지식·문서 권위·색인 작업에는 설치된 wiki-desk 스킬을 필요할 때 읽는다.
-대상 .wiki-desk/contract.json의 원문 scope와 wiki_dir를 먼저 확인한다.
+설치된 스킬의 project/contract.json에서 원문 scope와 wiki_dir를 먼저 확인한다.
 index로 후보를 좁힌 뒤 실제 원문·검토·수용 범위를 대조한다.
 예제 권위는 강제하지 않으며 쓰기 변경은 계획 검토와 명시적 적용 승인을 따른다.
 ```

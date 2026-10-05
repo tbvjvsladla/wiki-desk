@@ -1,10 +1,10 @@
 ---
 name: wiki-desk
-description: "Use when querying or indexing project knowledge. Reads original sources through a project-local OKF wiki, preserving provenance, agreed authority, input scope, and review boundaries."
+description: "Use when querying or indexing project knowledge. 위키 조회, 근거 문서 찾아줘, 이전에 뭐 했는지, 문서 정본·승인·결과 확인에 사용한다. Reads original sources through a project-local OKF wiki, preserving provenance, agreed authority, input scope, and review boundaries."
 license: MIT
 compatibility: "Python 3.10+ and PyYAML >=6,<7 for bundled helpers; file access and command execution depend on host permissions. Hermes, Codex, and Claude Code discovery must be checked separately."
 metadata:
-  version: "1.0.0"
+  version: "1.1.0"
   author: "Hermes Agent contributors"
   distribution: "full-folder-local-seed"
   knowledge-format: "OKF 0.2"
@@ -22,7 +22,7 @@ metadata:
 
 1. 실제 대상 프로젝트 root와 실행 backend에서 보이는 skill root를 확인한다. 개발자가 사용했던 경로나 현재 CWD를 대상이라고 추정하지 않는다.
 2. 대상의 실제 `HERMES.md`/`.hermes.md`, `AGENTS.md`/`AGENTS.override.md`, `CLAUDE.md`와 그 참조 중 현재 작업에 필요한 지침을 읽는다. host의 버전·설정·context 선택에 따라 자동 로딩이 다르므로 세 종류가 모두 자동 주입됐다고 주장하지 않는다. 상세 조건은 [설치와 인식](references/installation.md)을 필요한 때만 읽는다.
-3. 대상 `.wiki-desk/contract.json`과 합의 기록이 있으면 먼저 재사용한다. 없거나 중요한 미정 사항만 있으면 [적응형 초기화](references/bootstrap.md)를 따른다. 예제 JSON은 합성 예시이며 실제 사용자 합의가 아니다.
+3. 설치된 스킬의 `project/contract.json`과 합의 기록이 있으면 먼저 재사용한다. `project/receipt.json`은 기계별 소유권 기록이며 패키지 인벤토리에서 제외된다. 프로젝트 루트 `.wiki-desk/`는 1.0.x 배치이므로 조용히 무시하지 않고 [유지보수](references/maintenance.md)의 보존형 이관을 따른다. 없거나 중요한 미정 사항만 있으면 [적응형 초기화](references/bootstrap.md)를 따른다. 예제 JSON은 합성 예시이며 실제 사용자 합의가 아니다.
 4. 계약의 `wiki_dir`를 정확히 사용한다. `__llm-wiki`와 `__llm_wiki`는 각각 선택 가능한 다른 리터럴이다. 암묵적으로 교정·이름 변경·병합하지 않는다.
 5. root `index.md` → 관련 directory index/지식문서 → 선택한 원문 순서로 좁힌다. 전체 registry·모든 reference·전체 원문을 매 질의마다 읽지 않는다. 같은 세션에서 읽은 지침은 변경·충돌·맥락 소실 때 다시 읽는다.
 

@@ -24,16 +24,17 @@ from urllib.parse import quote
 import okf_bundle as core
 
 __all__ = ['validate_contract', 'scaffold_files', 'sync_plan', 'query',
-           'format_plan', 'check_bundle', 'read_contract', 'source_exclusions']
+           'format_plan', 'check_bundle', 'read_contract', 'source_exclusions',
+           'validate_registry_transition']
 INDEX_START = '<!-- okf-directory-listing:start -->'
 INDEX_END = '<!-- okf-directory-listing:end -->'
-CONTRACT_PATH = '.wiki-desk/contract.json'
 _REQUIRED = {'schema_version', 'project_name', 'wiki_dir', 'source_roots',
              'excluded_roots', 'authority_rules', 'fallback', 'copy_policy'}
 _BLOCKED_PARTS = {'.git', '.wiki-desk', '.agents', '.claude', '.hermes', '.codex', '.ssh', '.aws',
                   '__pycache__', '.pytest_cache', '.cache', '.venv', 'venv',
                   'node_modules', 'secret', 'secrets', 'generated', 'build', 'dist'}
 _SECRET_SUFFIXES = {'.pem', '.key', '.p12', '.pfx', '.keystore'}
+_SOURCE_SUFFIX = re.compile(r'\.[A-Za-z0-9]+')
 _RECORD_OWNED = {'id', 'source_path', 'sha256', 'title', 'document_type',
                  'authority_rank', 'role'}
 
@@ -137,6 +138,16 @@ def validate_contract(contract: dict, project_root: Path) -> dict:
             if key == 'source_roots' and (_below(value, wiki) or
                     any(p.casefold() in _BLOCKED_PARTS for p in PurePosixPath(value).parts)):
                 raise ValueError(f'source root is excluded control/wiki/generated/secret: {value}')
+    if 'source_suffixes' in contract:
+        suffixes = contract['source_suffixes']
+        if (not isinstance(suffixes, list) or not suffixes or
+                any(not isinstance(s, str) or not _SOURCE_SUFFIX.fullmatch(s) for s in suffixes)):
+            raise ValueError('source_suffixes: non-empty list of file suffixes such as ".md" required')
+        if len({s.casefold() for s in suffixes}) != len(suffixes):
+            raise ValueError('source_suffixes: duplicate suffix')
+        for value in contract['source_roots']:
+            if _safe(project, value, exists=True).is_file() and not _suffix_ok(value, contract):
+                raise ValueError(f'source root file is outside source_suffixes: {value}')
     if not isinstance(contract['authority_rules'], list):
         raise ValueError('authority_rules: ordered list required')
     for i, rule in enumerate(contract['authority_rules']):
@@ -163,12 +174,17 @@ def _json_load(data: bytes, label: str) -> dict:
     return result
 
 
-def read_contract(project_root: Path) -> dict:
+def read_contract(project_root: Path, contract_path: str) -> dict:
+    """Read an explicit project-relative contract, never a contract in the wiki."""
     project = _project(project_root)
-    path = _safe(project, CONTRACT_PATH, exists=True)
+    rel = _relative(contract_path, 'contract_path')
+    path = _safe(project, rel, exists=True)
     if not path.is_file():
         raise ValueError('contract must be a regular file outside the wiki')
-    return validate_contract(_json_load(path.read_bytes(), CONTRACT_PATH), project)
+    contract = validate_contract(_json_load(path.read_bytes(), rel), project)
+    if _below(rel, contract['wiki_dir']):
+        raise ValueError('contract must be outside the wiki')
+    return contract
 
 
 def _snapshot(project: Path, wiki: str) -> dict[str, str]:
@@ -204,21 +220,33 @@ def _excluded(rel: str, contract: dict) -> bool:
             PurePosixPath(name).suffix in _SECRET_SUFFIXES)
 
 
+def _suffix_ok(rel: str, contract: dict) -> bool:
+    """Absent policy retains all regular files; filtering never opens a body."""
+    suffixes = contract.get('source_suffixes')
+    return suffixes is None or PurePosixPath(rel).suffix.casefold() in {s.casefold() for s in suffixes}
+
+
+def _walk_prefix(project: Path, base: str) -> str:
+    """Compute the project-relative prefix once per walked directory."""
+    rel = Path(base).relative_to(project).as_posix()
+    return '' if rel == '.' else rel + '/'
+
+
 def _paths(project: Path, contract: dict) -> list[str]:
     collected = set()
     for root in contract['source_roots']:
         path = _safe(project, root, exists=True)
         if path.is_file():
-            if not _excluded(root, contract):
+            if not _excluded(root, contract) and _suffix_ok(root, contract):
                 collected.add(root)
             continue
         for base, dirs, files in os.walk(path, followlinks=False):
+            prefix = _walk_prefix(project, base)
             retained = []
             for name in sorted(dirs):
-                candidate = Path(base) / name
-                rel = candidate.relative_to(project).as_posix()
+                rel = prefix + name
                 # Do not traverse excluded trees, but never hide a visible symlink.
-                if candidate.is_symlink():
+                if os.path.islink(os.path.join(base, name)):
                     raise ValueError(f'unsafe source symlink: {rel}')
                 if _excluded(rel, contract):
                     continue
@@ -226,11 +254,10 @@ def _paths(project: Path, contract: dict) -> list[str]:
                 retained.append(name)
             dirs[:] = retained
             for name in sorted(files):
-                candidate = Path(base) / name
-                rel = candidate.relative_to(project).as_posix()
-                if candidate.is_symlink():
+                rel = prefix + name
+                if os.path.islink(os.path.join(base, name)):
                     raise ValueError(f'unsafe source symlink: {rel}')
-                if _excluded(rel, contract):
+                if _excluded(rel, contract) or not _suffix_ok(rel, contract):
                     continue
                 candidate = _safe(project, rel, exists=True)
                 if not candidate.is_file():
@@ -256,11 +283,11 @@ def source_exclusions(project_root: Path, contract: dict) -> tuple[str, ...]:
         if path.is_file():
             continue
         for base, dirs, files in os.walk(path, followlinks=False):
+            prefix = _walk_prefix(project, base)
             retained = []
             for name in sorted(dirs):
-                candidate = Path(base) / name
-                rel = candidate.relative_to(project).as_posix()
-                if candidate.is_symlink():
+                rel = prefix + name
+                if os.path.islink(os.path.join(base, name)):
                     raise ValueError(f'unsafe source symlink: {rel}')
                 if _excluded(rel, contract):
                     excluded.add(rel)
@@ -269,11 +296,10 @@ def source_exclusions(project_root: Path, contract: dict) -> tuple[str, ...]:
                     retained.append(name)
             dirs[:] = retained
             for name in sorted(files):
-                candidate = Path(base) / name
-                rel = candidate.relative_to(project).as_posix()
-                if candidate.is_symlink():
+                rel = prefix + name
+                if os.path.islink(os.path.join(base, name)):
                     raise ValueError(f'unsafe source symlink: {rel}')
-                if _excluded(rel, contract):
+                if _excluded(rel, contract) or not _suffix_ok(rel, contract):
                     excluded.add(rel)
                 else:
                     _safe(project, rel, exists=True)
@@ -310,19 +336,17 @@ def _inventory(project: Path, contract: dict) -> tuple[list[dict], dict[str, str
     return records, hashes
 
 
-def _load_registry(project: Path, contract: dict) -> dict:
-    rel = contract['wiki_dir'] + '/source-registry.json'
-    path = _safe(project, rel)
-    if not path.exists():
-        return {'schema_version': 1, 'sources': []}
-    if not path.is_file():
-        raise ValueError('source registry must be a regular JSON file')
-    registry = _json_load(path.read_bytes(), rel)
+def _registry_entries(registry: dict) -> dict[str, dict]:
+    """Validate active identity/path/hash structure, without filesystem reads."""
+    if not isinstance(registry, dict):
+        raise ValueError('registry must be an object')
     if type(registry.get('schema_version')) is not int or registry['schema_version'] != 1:
         raise ValueError('registry schema_version must be integer 1')
     if not isinstance(registry.get('sources'), list):
         raise ValueError('registry sources must be a list')
-    identities, paths = set(), set()
+    if 'archived_sources' in registry and not isinstance(registry['archived_sources'], list):
+        raise ValueError('registry archived_sources must be a list')
+    identities, paths = set(), {}
     for row in registry['sources']:
         if not isinstance(row, dict):
             raise ValueError('registry source must be an object')
@@ -332,26 +356,150 @@ def _load_registry(project: Path, contract: dict) -> dict:
         if row['id'] in identities or rel in paths:
             raise ValueError('duplicate registered source ID/path')
         identities.add(row['id'])
-        paths.add(rel)
+        paths[rel] = row
         if not isinstance(row.get('sha256'), str) or not re.fullmatch(r'[0-9a-f]{64}', row['sha256']):
             raise ValueError('registered sha256 missing/invalid; hash retrofit refused')
-        source = _safe(project, rel, exists=True)
-        if not source.is_file():
+    return paths
+
+
+def _reconciliation(accept_removed, relocations) -> tuple[tuple[str, ...], tuple[tuple[str, str], ...]]:
+    """Normalize only the container, never repair a requested path spelling."""
+    if not isinstance(accept_removed, (tuple, list)) or not isinstance(relocations, (tuple, list)):
+        raise ValueError('reconciliation requests must be tuple/list collections')
+    removed = tuple(_relative(path, 'accept_removed') for path in accept_removed)
+    moves = []
+    for pair in relocations:
+        if not isinstance(pair, (tuple, list)) or len(pair) != 2:
+            raise ValueError('relocations require (old, new) path pairs')
+        moves.append((_relative(pair[0], 'relocation old'), _relative(pair[1], 'relocation destination')))
+    old = [path for path, _ in moves]
+    new = [path for _, path in moves]
+    if (len(set(removed)) != len(removed) or len(set(old)) != len(old) or
+            len(set(new)) != len(new) or set(removed) & set(old) or
+            (set(removed) | set(old)) & set(new)):
+        raise ValueError('duplicate/overlapping reconciliation requests')
+    all_paths = removed + tuple(old) + tuple(new)
+    for i, path in enumerate(all_paths):
+        if any(_below(path, other) or _below(other, path) for other in all_paths[i + 1:]):
+            raise ValueError('overlapping reconciliation paths')
+    return removed, tuple(moves)
+
+
+def _reconciliation_targets(previous: dict[str, dict], removed, moves) -> None:
+    affected = set(removed) | {old for old, _ in moves}
+    if affected - previous.keys():
+        raise ValueError('reconciliation path is not an active registered source')
+    if any(new in previous for _, new in moves):
+        raise ValueError('relocation destination collides with a registered source')
+
+
+def _archive_events(previous: dict[str, dict], removed, moves, now: str) -> list[dict]:
+    return ([{'source': copy.deepcopy(previous[path]), 'reason': 'removed', 'at': now}
+             for path in removed] +
+            [{'source': copy.deepcopy(previous[old]), 'reason': 'relocated', 'at': now, 'destination': new}
+             for old, new in moves])
+
+
+def _same_json(a, b) -> bool:
+    # JSON equality must not treat True as 1 or silently accept nonfinite values.
+    try:
+        return json.dumps(a, sort_keys=True, allow_nan=False) == json.dumps(b, sort_keys=True, allow_nan=False)
+    except (TypeError, ValueError) as exc:
+        raise ValueError('registry transition requires finite JSON values') from exc
+
+
+def validate_registry_transition(previous: dict, registry: dict, *, accept_removed=(),
+                                 relocations=(), now: str | None = None) -> bool:
+    """Independently verify identity, metadata and exact append-only history.
+
+    Filesystem eligibility and current hashes belong to the planner/caller's
+    source snapshot validation. This validator never opens original bodies.
+    Existing history may contain unknown event shapes and is retained verbatim.
+    """
+    before, after = _registry_entries(previous), _registry_entries(registry)
+    removed, moves = _reconciliation(accept_removed, relocations)
+    _reconciliation_targets(before, removed, moves)
+    affected = set(removed) | {old for old, _ in moves}
+    destinations = {new: old for old, new in moves}
+    expected = (before.keys() - affected) | destinations.keys()
+    if not expected <= after.keys() or affected & after.keys():
+        raise ValueError('registry transition lost an active source or retained a reconciled path')
+    top_before = {k: v for k, v in previous.items() if k not in {'sources', 'archived_sources'}}
+    top_after = {k: v for k, v in registry.items() if k not in {'sources', 'archived_sources'}}
+    if not _same_json(top_before, top_after):
+        raise ValueError('registry transition changed top-level metadata')
+    observations = _RECORD_OWNED - {'id'}
+    old_ids = {row['id'] for row in before.values()}
+    for path, row in after.items():
+        if not _RECORD_OWNED <= row.keys() or not isinstance(row['title'], str):
+            raise ValueError('registry transition requires complete source observations')
+        _rule(row, 'registry source')
+        original = before.get(destinations.get(path, path))
+        if original is not None:
+            kept_before = {k: v for k, v in original.items() if k not in observations}
+            kept_after = {k: v for k, v in row.items() if k not in observations}
+            if not _same_json(kept_before, kept_after):
+                raise ValueError('registry transition changed source ID or extension metadata')
+        elif row['id'] != 'src-' + _digest(path.encode('utf-8')) or row['id'] in old_ids:
+            raise ValueError('new source identity must be a noncolliding path digest')
+    history = previous.get('archived_sources', [])
+    following = registry.get('archived_sources', [])
+    event_count = len(removed) + len(moves)
+    if event_count:
+        if len(following) != len(history) + event_count:
+            raise ValueError('registry archived_sources append count mismatch')
+        first = following[len(history)]
+        if not isinstance(first, dict) or not core._timestamp(first.get('at')):
+            raise ValueError('registry archive timestamp requires an explicit offset')
+        stamp = _now(now) if now is not None else first['at']
+        expected_history = history + _archive_events(before, removed, moves, stamp)
+    else:
+        if now is not None:
+            _now(now)
+        if ('archived_sources' in previous) != ('archived_sources' in registry):
+            raise ValueError('registry transition changed history field presence')
+        expected_history = history
+    if not _same_json(expected_history, following):
+        raise ValueError('registry archived_sources must preserve exact history and requested events')
+    return True
+
+
+def _load_registry(project: Path, contract: dict, *, allow_missing=()) -> dict:
+    rel = contract['wiki_dir'] + '/source-registry.json'
+    path = _safe(project, rel)
+    if not path.exists():
+        return {'schema_version': 1, 'sources': []}
+    if not path.is_file():
+        raise ValueError('source registry must be a regular JSON file')
+    registry = _json_load(path.read_bytes(), rel)
+    for rel in _registry_entries(registry):
+        source = _safe(project, rel, exists=rel not in allow_missing)
+        if rel not in allow_missing and not source.is_file():
             raise ValueError(f'missing registered regular source: {rel}')
     return registry
 
 
-def _registry(project: Path, contract: dict) -> tuple[dict, dict[str, str]]:
-    old = _load_registry(project, contract)
+def _registry(project: Path, contract: dict, *, accept_removed=(), relocations=(),
+              now: str | None = None) -> tuple[dict, dict[str, str]]:
+    removed, moves = _reconciliation(accept_removed, relocations)
+    affected = set(removed) | {old for old, _ in moves}
+    old = _load_registry(project, contract, allow_missing=affected)
+    previous = {r['source_path']: r for r in old['sources']}
+    _reconciliation_targets(previous, removed, moves)
     records, hashes = _inventory(project, contract)
     indexed = {r['source_path']: r for r in records}
-    previous = {r['source_path']: r for r in old['sources']}
-    if previous.keys() - indexed.keys():
+    if affected & indexed.keys():
+        raise ValueError('reconciliation requires a missing or out-of-inventory registered source')
+    if any(new not in indexed for _, new in moves):
+        raise ValueError('relocation destination is missing, excluded or outside current source inventory')
+    unresolved = previous.keys() - indexed.keys() - affected
+    if unresolved:
         raise ValueError('registered sources outside current scope; pruning refused: ' +
-                         ', '.join(sorted(previous.keys() - indexed.keys())))
+                         ', '.join(sorted(unresolved)))
+    destinations = {new: before for before, new in moves}
     merged, ids = [], set()
     for row in records:
-        before = previous.get(row['source_path'], {})
+        before = previous.get(destinations.get(row['source_path'], row['source_path']), {})
         current = copy.deepcopy(before)
         current.update(row)
         if before:
@@ -362,6 +510,9 @@ def _registry(project: Path, contract: dict) -> tuple[dict, dict[str, str]]:
         merged.append(current)
     result = copy.deepcopy(old)
     result['sources'] = merged
+    if affected:
+        result['archived_sources'] = copy.deepcopy(old.get('archived_sources', [])) + _archive_events(previous, removed, moves, _now(now))
+    validate_registry_transition(old, result, accept_removed=removed, relocations=moves, now=now)
     return result, hashes
 
 
@@ -534,7 +685,7 @@ def scaffold_files(project_root: Path, contract: dict, now: str | None = None) -
         'SCHEMA.md': core.render_markdown({'type': 'Reference', 'title': 'Project wiki schema',
                                          'description': 'Local path-reference and OKF 0.2 contracts.',
                                          'generated': {'by': 'process:wiki-desk-scaffold', 'at': now}},
-            '# Project wiki schema\n\nThe project contract is `.wiki-desk/contract.json`, outside this wiki.\n'
+            '# Project wiki schema\n\nThe project contract is `<installed-skill>/project/contract.json`, outside this wiki.\n'
             'Unknown producer metadata and types are retained. Sources remain in their original project paths.\n'
             'Source registry existence and hashes are observations, not approval or verification.\n'
             'Knowledge lifecycle, generated events, verified events and document authority are separate.\n'),
@@ -553,7 +704,7 @@ def scaffold_files(project_root: Path, contract: dict, now: str | None = None) -
 def _plan_report(project: Path, contract: dict, texts: dict[str, str], desired: dict[str, str],
                  outputs: dict[str, bytes], baseline: dict[str, str], source_snapshot: dict[str, str],
                  now: str, mode: str, failures: dict | None = None,
-                 registry_owned=False) -> dict:
+                 registry_owned=False, allow_missing=()) -> dict:
     failures = failures or {}
     wiki, bundle = contract['wiki_dir'], project / contract['wiki_dir']
     rows = []
@@ -607,7 +758,7 @@ def _plan_report(project: Path, contract: dict, texts: dict[str, str], desired: 
         errors += 1
     coverage = len(texts) == len(set(texts)) and set(texts) <= set(desired) and len(desired) == len(rows) == len({r['wiki_path'] for r in rows})
     changed = sorted(r['path'] for r in all_rows if r['changed'])
-    original_registry = _load_registry(project, contract)
+    original_registry = _load_registry(project, contract, allow_missing=allow_missing)
     source_changes = [{'path': row['source_path'], 'registered_sha256': row['sha256'],
                        'current_sha256': source_snapshot.get(row['source_path'])}
                       for row in original_registry['sources']
@@ -629,7 +780,8 @@ def _plan_report(project: Path, contract: dict, texts: dict[str, str], desired: 
             'conformant': bool(coverage and not errors and preservation_complete and unchanged and sources_unchanged)}
 
 
-def sync_plan(project_root: Path, contract: dict, now: str | None = None) -> dict:
+def sync_plan(project_root: Path, contract: dict, now: str | None = None, *,
+              accept_removed=(), relocations=()) -> dict:
     project = _project(project_root)
     contract = validate_contract(contract, project)
     now = _now(now)
@@ -638,14 +790,16 @@ def sync_plan(project_root: Path, contract: dict, now: str | None = None) -> dic
     texts = _texts(project, contract, baseline)
     if not texts:
         raise ValueError('sync requires an existing non-empty wiki; use scaffold for fresh installation')
-    registry, source_snapshot = _registry(project, contract)
+    removed, moves = _reconciliation(accept_removed, relocations)
+    registry, source_snapshot = _registry(project, contract, accept_removed=removed, relocations=moves, now=now)
     desired = dict(texts)
     desired['source-registry.md'] = _registry_md(registry, texts.get('source-registry.md', ''), now)
     desired = directory_indices(project / wiki, desired)
     outputs = {wiki + '/' + name: text.encode('utf-8') for name, text in desired.items()}
     outputs[wiki + '/source-registry.json'] = _json_bytes(registry)
     report = _plan_report(project, contract, texts, desired, outputs, baseline, source_snapshot,
-                          now, 'sync-dry-run', registry_owned=True)
+                          now, 'sync-dry-run', registry_owned=True,
+                          allow_missing=set(removed) | {old for old, _ in moves})
     return {'outputs': outputs, 'report': report, 'baseline': baseline, 'source_snapshot': source_snapshot}
 
 
