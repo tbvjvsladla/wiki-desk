@@ -1,21 +1,7 @@
-# Python 실행 cache와 로컬 환경
-__pycache__/
-*.py[cod]
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
-.venv/
-venv/
-
-# 로컬 인증·비밀 파일; 배포 자산을 통째로 제외하지 않음
+# 위키 파생 색인 캐시(질의 시 재구축)와 로컬 환경
+.cache/
+node_modules/
 .env
 .env.*
 *.pem
 *.key
-
-# 설치된 스킬의 운영 상태(project/) 중 receipt 는 기계별 lifecycle 기록이라 추적하지 않는다.
-# project/contract.json 은 수신 프로젝트의 합의 계약이므로 수신 프로젝트가 추적한다.
-# 1.0.x 의 프로젝트 루트 .wiki-desk/ 는 더 이상 만들지 않는다(legacy 는 거부).
-project/receipt.json
-.wiki-desk/
-.cache/

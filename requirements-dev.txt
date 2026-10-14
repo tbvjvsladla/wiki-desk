@@ -1,3 +1,0 @@
-# Optional release/development regression; never auto-installed.
--r requirements.txt
-pytest>=8,<10

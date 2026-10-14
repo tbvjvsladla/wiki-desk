@@ -4,7 +4,7 @@
 
 문서 권위는 OKF 규격이 정하지 않는다. 대상의 실제 context·최신 사용자 지시·기존 합의와 원문을 확인하고 계약의 `authority_rules`/`fallback`을 사용한다. 예제 순서나 다른 프로젝트의 문서 계층을 강제하지 않는다.
 
-`authority_rank`가 높은 후보를 먼저 읽는 것은 탐색 우선순위일 뿐이다. glob 일치·document type·rank·metadata의 `active`·내용 hash·문자열 연결만으로 의미상 승인이나 결과 수용을 판정하지 않는다. 현재 runtime은 순서 있는 규칙의 첫 일치를 적용하고 query 후보를 rank로 정렬한다. 규칙이 겹치면 높은 rank가 앞 규칙을 자동 대체하지 않는다. 겹침이나 동순위가 중요한 판단에 영향을 주면 합의된 정책과 실제 원문을 대조한다. 해소되지 않은 충돌을 숨기지 않는다.
+`authority_rank`가 높은 후보를 먼저 읽는 것은 탐색 우선순위일 뿐이다. glob 일치·document type·rank·metadata의 `active`·내용 hash·문자열 연결만으로 의미상 승인이나 결과 수용을 판정하지 않는다. 현재 runtime은 순서 있는 규칙의 첫 일치를 적용한다. query 순위는 검색 점수가 1차이고 `authority_rank × search.authority_weight`가 가산·동점 처리에만 쓰인다(1.x의 rank 1차 정렬을 대체). 규칙이 겹치면 높은 rank가 앞 규칙을 자동 대체하지 않는다. 겹침이나 동순위가 중요한 판단에 영향을 주면 합의된 정책과 실제 원문을 대조한다. 해소되지 않은 충돌을 숨기지 않는다.
 
 ## 네 가지 서로 다른 판정
 
@@ -27,7 +27,7 @@
 
 ## ID·missing·stale·역사 보존
 
-`sources[].id`는 attribution key다. 경로가 이동했더라도 근거 있는 relocation 없이 새 ID로 갈아끼우지 않는다. 동일 ID 충돌·경로 재사용은 현재 파일의 연속성을 증명하지 않는다. 부재 source와 unresolved descriptor를 실제 파일로 위장하지 않는다.
+카드의 원문 경로(`resource`)와 `source_sha256`은 관측값이다. 경로가 이동했더라도 근거 있는 relocation 없이 새 ID로 갈아끼우지 않는다. 동일 ID 충돌·경로 재사용은 현재 파일의 연속성을 증명하지 않는다. 부재 source와 unresolved descriptor를 실제 파일로 위장하지 않는다.
 
 런타임의 missing guard가 적용을 차단하면 원문 root·checkout·제외 범위·이동 계보를 확인한다. source를 무검토 삭제하거나 guard를 비활성화해 통과시키지 않는다. `stale` 또는 마지막 관측 이력은 현 상태 확인과 구별해 보존한다.
 

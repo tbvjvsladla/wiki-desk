@@ -1,32 +1,69 @@
 {
   "schema_version": 1,
-  "project_name": "Example project",
+  "project_name": "01_RAG_Agent",
   "wiki_dir": "__llm-wiki",
   "source_roots": [
-    "docs"
+    "docs",
+    "letter"
   ],
-  "excluded_roots": [
-    "docs/private",
-    "docs/generated"
+  "excluded_roots": [],
+  "source_suffixes": [
+    ".md"
   ],
   "authority_rules": [
     {
-      "pattern": "docs/decisions/**",
-      "document_type": "decision",
-      "authority_rank": 100,
-      "role": "decision"
+      "pattern": "letter/responses/**",
+      "document_type": "response",
+      "authority_rank": 90,
+      "role": "result-report"
     },
     {
-      "pattern": "docs/reports/**",
-      "document_type": "report",
+      "pattern": "letter/issued/**",
+      "document_type": "issued",
+      "authority_rank": 80,
+      "role": "directive"
+    },
+    {
+      "pattern": "docs/devlog/**",
+      "document_type": "devlog",
       "authority_rank": 70,
       "role": "result-evidence"
     },
     {
-      "pattern": "docs/plans/**",
+      "pattern": "docs/h_report/**",
+      "document_type": "h_report",
+      "authority_rank": 65,
+      "role": "executive-summary"
+    },
+    {
+      "pattern": "docs/commission/**",
+      "document_type": "commission",
+      "authority_rank": 60,
+      "role": "coordination"
+    },
+    {
+      "pattern": "docs/paper/**",
+      "document_type": "paper",
+      "authority_rank": 50,
+      "role": "external-evidence"
+    },
+    {
+      "pattern": "docs/plan/**",
       "document_type": "plan",
-      "authority_rank": 30,
+      "authority_rank": 40,
       "role": "intent"
+    },
+    {
+      "pattern": "docs/request/**",
+      "document_type": "request",
+      "authority_rank": 35,
+      "role": "gate-request"
+    },
+    {
+      "pattern": "docs/interview/**",
+      "document_type": "interview",
+      "authority_rank": 30,
+      "role": "decision-record"
     }
   ],
   "fallback": {
@@ -34,5 +71,43 @@
     "authority_rank": 0,
     "role": "reference"
   },
-  "copy_policy": "path_reference"
+  "copy_policy": "path_reference",
+  "frontmatter_aliases": {
+    "created": [],
+    "status": [],
+    "related_issued": [],
+    "ouroboros_interview_id": [],
+    "ouroboros_seed_id": [],
+    "related_plan": [
+      "plan"
+    ],
+    "related_design": [
+      "design"
+    ],
+    "related_devlog": [],
+    "related_interview": [],
+    "branches": [
+      "branch"
+    ]
+  },
+  "filename_pattern": "^(?<prefix>[a-z][a-z_]*)_(?<yymmddhh>\\d{8})_(?<title>.+)\\.md$",
+  "layout": {
+    "cards_dir": "cards",
+    "cache_dir": ".cache",
+    "archive_dir": "archive"
+  },
+  "search": {
+    "bm25_k1": 1.2,
+    "bm25_b": 0.75,
+    "field_boost": {
+      "title": 3,
+      "heading": 2,
+      "meta": 1.5,
+      "body": 1
+    },
+    "authority_weight": 0.01,
+    "span_max_lines": 40,
+    "result_limit": 10,
+    "spans_per_result": 2
+  }
 }

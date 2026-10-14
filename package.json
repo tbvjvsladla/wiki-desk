@@ -1,0 +1,9 @@
+{
+  "name": "wiki-desk",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "description": "01_RAG_Agent project knowledge desk (OKF 0.2 pointer library) - TypeScript, Node 24, zero runtime dependencies",
+  "scripts": { "test": "node --test" },
+  "engines": { "node": ">=24" }
+}
