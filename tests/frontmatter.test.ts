@@ -10,21 +10,21 @@ const okData = (fm: Frontmatter): Record<string, unknown> => {
   return (fm as Extract<Frontmatter, { kind: "ok" }>).data;
 };
 
-// 01 실관례 frontmatter(1ce12ca docs/plan 형태 + 블록 스칼라·중첩 매핑 확장)
-const PLAN_01 = [
+// 관례형 frontmatter(docs/plan 형태 + 블록 스칼라·중첩 매핑 확장) — 합성 예시
+const PLAN_FM = [
   "---",
-  "title: wiki-desk TS 재설계·01 로컬 설치·전후 벤치 — 설계",
+  "title: 예시 검색도구 도입·전후 비교 — 설계",
   "created: 2026-10-14",
   "document_type: plan",
-  "ouroboros_interview_id: interview_20261013_225913",
-  "ouroboros_seed_id: seed_c013a63d08df",
+  "ouroboros_interview_id: interview_20260901_120000",
+  "ouroboros_seed_id: seed_0123456789ab",
   "related_issued: null   # operator 직접 지시(대화) — issued SDD 없음",
   "status: issued   # 2026-09-29 P3-4에서 확정값 반영",
-  "related_plan: docs/plan/plan_26080614_abstention_*(설계·구현) / docs/plan/plan_26081205_*",
-  "branches: [seed-nl2sql-workflow, single-port-multi-profile]",
-  "workspace_scope: [01_RAG_Agent]",
+  "related_plan: docs/plan/plan_26080101_예시_*(설계·구현) / docs/plan/plan_26080201_*",
+  "branches: [branch-a, branch-b]",
+  "workspace_scope: [example-project]",
   "depends_on:",
-  "  - docs/plan/plan_26092818_멀티턴_P0A_작업환경_플러그인_코드스타일_설계.md   # 개정 code-style 기준",
+  "  - docs/plan/plan_26082801_예시_선행_설계.md   # 개정 code-style 기준",
   "review:",
   "  owner: operator",
   "  gates:",
@@ -41,25 +41,25 @@ const PLAN_01 = [
   "",
 ].join("\n");
 
-test("splitFrontmatter: 01 plan frontmatter를 서브셋으로 파싱한다", () => {
-  const fm = splitFrontmatter(PLAN_01);
+test("splitFrontmatter: 관례형 plan frontmatter를 서브셋으로 파싱한다", () => {
+  const fm = splitFrontmatter(PLAN_FM);
   assert.equal(fm.bodyStartLine, 25);
   assert.deepEqual(okData(fm), {
-    title: "wiki-desk TS 재설계·01 로컬 설치·전후 벤치 — 설계",
+    title: "예시 검색도구 도입·전후 비교 — 설계",
     created: "2026-10-14", // ISO 날짜는 문자열 유지
     document_type: "plan",
-    ouroboros_interview_id: "interview_20261013_225913",
-    ouroboros_seed_id: "seed_c013a63d08df",
+    ouroboros_interview_id: "interview_20260901_120000",
+    ouroboros_seed_id: "seed_0123456789ab",
     related_issued: null, // 값 뒤 `# 주석` 제거
     status: "issued",
-    related_plan: "docs/plan/plan_26080614_abstention_*(설계·구현) / docs/plan/plan_26081205_*",
-    branches: ["seed-nl2sql-workflow", "single-port-multi-profile"],
-    workspace_scope: ["01_RAG_Agent"],
-    depends_on: ["docs/plan/plan_26092818_멀티턴_P0A_작업환경_플러그인_코드스타일_설계.md"],
+    related_plan: "docs/plan/plan_26080101_예시_*(설계·구현) / docs/plan/plan_26080201_*",
+    branches: ["branch-a", "branch-b"],
+    workspace_scope: ["example-project"],
+    depends_on: ["docs/plan/plan_26082801_예시_선행_설계.md"],
     review: { owner: "operator", gates: { hitl: true, rounds: 3 } },
     note: "첫 줄\n  들여쓴 줄\n\n빈 줄 뒤\n",
   });
-  assert.equal(bodyText(PLAN_01, fm), "\n# 본문\n");
+  assert.equal(bodyText(PLAN_FM, fm), "\n# 본문\n");
 });
 
 test("splitFrontmatter: frontmatter 없음 → kind none, bodyStartLine 1", () => {
@@ -280,13 +280,13 @@ test("emitYaml: 결정론·키 순서 유지·왕복 의미 보존", () => {
 
 test("emitYaml: 블록 표기 형태(빈 컬렉션은 흐름 표기)", () => {
   assert.equal(
-    emitYaml({ type: "Plan", tags: ["plan", "x"], x01: {}, g: { by: "process:a", at: "2026-10-14T00:00:00Z" }, l: [{ a: 1, b: 2 }] }),
+    emitYaml({ type: "Plan", tags: ["plan", "x"], source_meta: {}, g: { by: "process:a", at: "2026-10-14T00:00:00Z" }, l: [{ a: 1, b: 2 }] }),
     [
       "type: Plan",
       "tags:",
       "  - plan",
       "  - x",
-      "x01: {}",
+      "source_meta: {}",
       "g:",
       "  by: process:a",
       '  at: "2026-10-14T00:00:00Z"', // 시각은 YAML 1.1 timestamp로 읽히지 않게 따옴표
@@ -320,7 +320,7 @@ test("emitYaml: 모호한 문자열은 따옴표 — 자체 파서 왕복", () =
   const out = emitYaml(obj);
   for (const s of AMBIGUOUS) assert.ok(out.includes(`${JSON.stringify(s)}: ${JSON.stringify(s)}\n`), s);
   assert.deepEqual(parseYaml(out), obj);
-  assert.equal(emitYaml({ a: "plain", b: "01_RAG_Agent는" }), "a: plain\nb: \"01_RAG_Agent는\"\n");
+  assert.equal(emitYaml({ a: "plain", b: "007_agent는" }), "a: plain\nb: \"007_agent는\"\n");
 });
 
 // python3·PyYAML 필요 — 부재 시 실패로 남긴다(면제 아님)

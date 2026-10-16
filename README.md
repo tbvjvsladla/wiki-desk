@@ -2,16 +2,22 @@
 
 > **에이전트가 기억에 기대어 답하지 않고, 프로젝트 원문의 위치와 근거 줄범위로 돌아가 읽게 하는 지식 사서 스킬입니다.**
 >
-> 배포 버전 **2.0.0 (TypeScript)** · 브랜치 `wiki-desk_TS` · Node.js 24 · Claude Code 프로젝트 스킬용 전체 폴더 패키지
+> 배포 버전 **3.0.0 (TypeScript)** · 브랜치 `wiki-desk_TS` · Node.js 24 · Claude Code 프로젝트 스킬용 전체 폴더 패키지
 
 ## 브랜치 안내 — 같은 사서, 두 구현
 
 | 브랜치 | 구현 | 대상 | 상태 |
 |---|---|---|---|
 | `wiki-desk_PY` | Python 3.10+ · PyYAML | Hermes · Codex · Claude Code 공통 seed, 설치기·이관·형식 교정 포함 | 1.1.0 |
-| `wiki-desk_TS` (이 브랜치) | TypeScript (Node.js 24, 런타임 의존성 0) | Claude Code 프로젝트 스킬, 포인터 카드 + 결정론 검색 | 2.0.0 |
+| `wiki-desk_TS` (이 브랜치) | TypeScript (Node.js 24, 런타임 의존성 0) | Claude Code 프로젝트 스킬, 포인터 카드 + 결정론 검색 | 3.0.0 |
 
-이 판은 1.1.0을 TypeScript로 **재설계**한 것입니다. 단순 번역이 아니라 카드 형식·검색 알고리즘·소유권 기록 위치가 바뀌었습니다. 계약 파일·위키 배치·명령이 달라 **한쪽 설치본을 다른 쪽 명령으로 관리할 수 없습니다.** 출발점은 01_RAG_Agent 워크스페이스에 설치해 쓰는 판입니다.
+이 판은 1.1.0을 TypeScript로 **재설계**한 것입니다. 단순 번역이 아니라 카드 형식·검색 알고리즘·소유권 기록 위치가 바뀌었습니다. 계약 파일·위키 배치·명령이 달라 **한쪽 설치본을 다른 쪽 명령으로 관리할 수 없습니다.**
+
+### 3.0.0에서 바뀐 것 (2.0.0 설치본은 재구축 필요)
+
+- **카드 키 변경(breaking)**: 원문 frontmatter 보존 키가 2.0.0의 프로젝트 전용 namespace 키(번호 접두 키와 그 `_unknown` 짝)에서 프로젝트 중립 이름 `source_meta`/`source_meta_unknown`으로 바뀌었습니다. 호환 분기는 두지 않았으므로 2.0.0으로 만든 카드는 3.0.0에서 `card.invalid`로 보고됩니다.
+- **배포 위생**: 특정 프로젝트 식별자를 코드·문서·시험에서 제거했고, `scripts/sanitize-check.ts`(사이트명·개인 경로·사설 IP·프로젝트 식별자 0건)와 `PACKAGE_MANIFEST.json`(파일별 sha256)을 추가했습니다. 예제 계약은 합성 예시입니다.
+- **2.0.0 설치본 이행**: 스킬 폴더를 3.0.0으로 교체한 뒤 `remove --apply` → `sync --apply`로 카드를 다시 만듭니다. `remove`는 사람이 고친 카드·`contract.json`을 보존하므로, 남은 카드에 이전 키가 있으면 수정분을 옮긴 뒤 직접 지우고 다시 sync합니다.
 
 ## 해결하려는 문제 — "아마 그렇게 결정했을 것"과 "이 문서 41~58줄에 그렇게 적혀 있다"는 다릅니다
 
@@ -38,7 +44,7 @@ wiki-desk는 그 확인을 돕는 **사서**입니다. 원문을 복사하거나
 
 ### 1.1.0(Python)과 무엇이 다른가요?
 
-| 항목 | 1.1.0 | 2.0.0 |
+| 항목 | 1.1.0 | 3.0.0 |
 |---|---|---|
 | 실행 | Python 3.10+ · PyYAML | Node.js 24+, `.ts` 직접 실행, npm 설치 없음 |
 | 위키 내용 | OKF 위키 문서 + 원문 registry | 원문 1건당 포인터 카드 |
@@ -63,22 +69,24 @@ wiki-desk는 그 확인을 돕는 **사서**입니다. 원문을 복사하거나
 
 **폴더 전체가 한 단위입니다.** `SKILL.md`만 복사하면 CLI가 빠집니다. 기존 동명 스킬이 있으면 덮어쓰지 말고 차이를 먼저 검토하세요.
 
+배포 단위는 **태그된 커밋**입니다. `git archive`로 받으면 `PACKAGE_MANIFEST.json`과 바이트 단위로 같은 트리가 설치됩니다.
+
 ```bash
 (
   set -euo pipefail
-  SOURCE="/absolute/path/to/wiki-desk"     # 이 브랜치를 받은 폴더
+  SOURCE="/absolute/path/to/wiki-desk"     # 이 저장소를 받은 폴더(git clone)
+  VERSION="v3.0.0"
   PROJECT="/absolute/path/to/project"      # 설치할 프로젝트 루트
   DEST="$PROJECT/.claude/skills/wiki-desk"
-  test -f "$SOURCE/SKILL.md"
   if [ -e "$DEST" ] || [ -L "$DEST" ]; then
     printf '중단: 기존 스킬을 보존합니다: %s\n' "$DEST" >&2
     exit 1
   fi
-  mkdir -p "$PROJECT/.claude/skills"
-  mkdir "$DEST"
-  cp -R "$SOURCE/SKILL.md" "$SOURCE/LICENSE" "$SOURCE/README.md" "$SOURCE/package.json" \
-    "$SOURCE/src" "$SOURCE/references" "$SOURCE/tests" "$SOURCE/assets" "$DEST/"
-  cd "$DEST" && node --test
+  mkdir -p "$DEST"
+  git -C "$SOURCE" archive "$VERSION" | tar -x -C "$DEST"
+  cd "$DEST"
+  node scripts/package-manifest.ts --check   # 파일 집합·sha256 대조
+  node --test
 )
 ```
 
@@ -88,7 +96,7 @@ wiki-desk는 그 확인을 돕는 **사서**입니다. 원문을 복사하거나
 
 ### 계약
 
-[`assets/project-contract.example.json`](assets/project-contract.example.json)은 01_RAG_Agent에서 실제로 쓰는 계약입니다. 다른 프로젝트에 그대로 승인된 계약으로 쓰지 말고, 아래 항목을 사용자와 합의해 바꾸세요.
+[`assets/project-contract.example.json`](assets/project-contract.example.json)은 **합성 예시**입니다. 그대로 승인된 계약으로 쓰지 말고, 아래 항목을 사용자와 합의해 바꾸세요.
 
 | key | 뜻 |
 |---|---|
@@ -155,20 +163,11 @@ node .claude/skills/wiki-desk/src/cli.ts remove --apply
 
 receipt에 기록되고 **바뀌지 않은** 생성물과 색인 캐시만 지웁니다. `contract.json`·사람이 고치거나 추가한 파일·원문은 보존합니다. receipt가 없거나 위키 밖 경로를 담고 있으면 거부합니다.
 
-## 실측 — 설치 전후 벤치 (01_RAG_Agent, 2026-10-14)
+## 성능 메모
 
-Claude Sonnet 5.5, 두 브랜치 각 30문항(문서 찾기·근거 구문) × 3회 × 3조건 = 540회. 조건마다 격리된 복사본에서 실행했습니다.
-
-| 조건 | 정답(다수결) | 응답 시간 중앙값 | 위키데스크 사용 |
-|---|---|---|---|
-| 도구 없음(Grep/Glob/Read) | 60/60 | 11.9~12.5초 | — |
-| 설치만 | 60/60 | 12.0~12.5초 | 0/180회 |
-| "위키데스크를 먼저 써라" 지시 | 60/60 | 13.0~13.9초 | 149/180회 |
-
-- 정확도는 모든 조건이 만점이라 차이를 가를 수 없었습니다.
-- 서브에이전트는 설치만으로는 도구를 스스로 쓰지 않았고, 사용을 지시하면 스킬을 읽는 턴이 늘어 4~17% 느려졌습니다.
-- 도구 자체는 빠릅니다: 카드 구축 151건 3.1초·236건 4.5초, 질의 0.25~0.35초. 문서 150~240건 규모에서 응답 시간은 색인이 아니라 **대화 턴 수**가 좌우합니다.
-- 따라서 이 판의 가치는 속도보다 **근거 위치를 남기고 다시 찾을 수 있게 하는 것**과 입고 규율에 있습니다.
+- 색인과 질의는 결정론이며 LLM·임베딩 호출이 없습니다. 바뀐 원문만 재색인합니다.
+- 수백 건 규모의 문서 모음에서는 응답 시간이 색인보다 **에이전트의 대화 턴 수**에 좌우되기 쉽습니다. 이 도구의 주된 가치는 속도보다 **근거 위치를 남기고 다시 찾게 하는 것**과 입고 규율에 있습니다.
+- 자기 코퍼스로 재려면 `node tests/perf.probe.ts <git 저장소> <커밋> <원문 루트(쉼표 구분)> <질의>...`를 실행합니다(`node --test` 대상 아님).
 
 ## 안전 경계와 검증 방법
 
@@ -179,7 +178,9 @@ Claude Sonnet 5.5, 두 브랜치 각 30문항(문서 찾기·근거 구문) × 3
 - 알려진 미수정 사항: sync가 소유를 판정한 뒤 쓰기까지 약 0.1초 사이에 사람이 같은 카드를 저장하면 덮어쓸 수 있음, 계약 JSON의 중복 키를 거부하지 않음, 상시 타입 검사 단계 없음(TypeScript strict 점검은 개발 중 1회 통과).
 
 ```bash
-cd .claude/skills/wiki-desk && node --test      # 결정론 회귀 238건(LLM·네트워크 없음)
+cd .claude/skills/wiki-desk && node --test      # 결정론 회귀(LLM·네트워크 없음)
+node scripts/sanitize-check.ts                  # 배포 위생 0건
+node scripts/package-manifest.ts --check        # manifest 대조
 ```
 
 개발 중 추가로 OKF 공식 예제 81건 round-trip 무손실, 코드 리뷰 6종 5라운드(치명·주요 결함 0)를 확인했습니다. 시험 통과는 실제 프로젝트에서의 인식·사용 성공을 뜻하지 않습니다.

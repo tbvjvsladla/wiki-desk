@@ -185,29 +185,29 @@ test("§9 MUST: 로그 날짜 헤딩은 YYYY-MM-DD (펜스 코드 안은 무시)
 
 const CARD: Card = {
   type: "plan",
-  title: "위키데스크 TS 재설계 설치 벤치 설계",
+  title: "예시 검색도구 도입 설계",
   description: null,
-  resource: "docs/plan/plan_26101409_위키데스크_TS_재설계_설치_벤치_설계.md",
+  resource: "docs/plan/plan_26090109_예시_검색도구_도입_설계.md",
   tags: ["plan"],
   generated: { by: "process:wiki-desk-ts", at: "2026-10-14T09:00:00+09:00" },
   authority: { document_type: "plan", authority_rank: 4, role: "세부 계획" },
-  x01: { created: "2026-10-14", related_issued: null, branches: ["seed-nl2sql-workflow", "single-port-multi-profile"] },
-  x01_unknown: { "x-weird key": { nested: ["123", 123, "null", true, "줄\n바꿈"] }, related_interview: "a: b # c" },
+  source_meta: { created: "2026-10-14", related_issued: null, branches: ["branch-a", "branch-b"] },
+  source_meta_unknown: { "x-weird key": { nested: ["123", 123, "null", true, "줄\n바꿈"] }, related_interview: "a: b # c" },
   needs_review: false,
   review_reasons: [],
   source_sha256: "ab".repeat(32),
   extra: {},
 };
 
-test("renderCard → parseCard 왕복은 카드 원형 보존(x01_unknown 포함)", () => {
+test("renderCard → parseCard 왕복은 카드 원형 보존(source_meta_unknown 포함)", () => {
   const text = renderCard(CARD);
   assert.deepEqual(parseCard(text, "cards/x.md"), CARD);
-  assert.ok(text.startsWith("---\ntype: plan\ntitle: 위키데스크 TS 재설계 설치 벤치 설계\n"));
-  assert.ok(text.endsWith("\n# 위키데스크 TS 재설계 설치 벤치 설계\n\n- 원문: `docs/plan/plan_26101409_위키데스크_TS_재설계_설치_벤치_설계.md`\n"));
+  assert.ok(text.startsWith("---\ntype: plan\ntitle: 예시 검색도구 도입 설계\n"));
+  assert.ok(text.endsWith("\n# 예시 검색도구 도입 설계\n\n- 원문: `docs/plan/plan_26090109_예시_검색도구_도입_설계.md`\n"));
   assert.deepEqual(checkConcept(text, "cards/x.md"), []); // 카드 자체가 OKF concept
   const reviewed = { ...CARD, title: null, needs_review: true, review_reasons: ["파일명 규칙 위반: x"] };
   assert.deepEqual(parseCard(renderCard(reviewed), "cards/x.md"), reviewed);
-  assert.match(renderCard(reviewed), /\n# docs\/plan\/plan_26101409/);
+  assert.match(renderCard(reviewed), /\n# docs\/plan\/plan_26090109/);
 });
 
 const REL = "cards/docs/plan/x.md";

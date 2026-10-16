@@ -12,7 +12,7 @@ export type Contract = {
   authority_rules: AuthorityRule[];
   fallback: AuthorityClass;
   copy_policy: "path_reference";
-  /** 01 관례 frontmatter 키 별칭: 정본 키 → 동의 키 목록 */
+  /** 원문 frontmatter 키 별칭(계약 frontmatter_aliases): 정본 키 → 동의 키 목록 */
   frontmatter_aliases: Record<string, string[]>;
   /** 파일명 규칙(문서구분_YYMMDDHH_한글제목.md) 검사용 정규식 원문 */
   filename_pattern: string;
@@ -72,8 +72,8 @@ export type Card = {
   tags: string[];
   generated: { by: string; at: string };
   authority: AuthorityClass;
-  x01: Record<string, unknown>;
-  x01_unknown: Record<string, unknown>;
+  source_meta: Record<string, unknown>;
+  source_meta_unknown: Record<string, unknown>;
   /** review_reasons가 비어 있지 않음과 항상 같다(parseCard가 불일치를 거부) */
   needs_review: boolean;
   review_reasons: string[];
@@ -87,7 +87,7 @@ export type IndexDoc = {
   path: string;
   sha256: string;
   title: string;
-  /** 카드 메타 값(type·tags·x01·x01_unknown 스칼라)을 공백으로 이은 문자열 */
+  /** 카드 메타 값(type·tags·source_meta·source_meta_unknown 스칼라)을 공백으로 이은 문자열 */
   metaText: string;
   lines: string[];
   bodyStartLine: number;

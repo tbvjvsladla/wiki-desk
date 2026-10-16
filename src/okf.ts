@@ -132,7 +132,7 @@ export function roundTrip(text: string): string {
 /** 카드 frontmatter 키 순서(설계 §6). 이 밖의 최상위 키는 Card.extra. */
 const CARD_KEYS = [
   "type", "title", "description", "resource", "tags", "generated", "authority",
-  "x01", "x01_unknown", "needs_review", "review_reasons", "source_sha256",
+  "source_meta", "source_meta_unknown", "needs_review", "review_reasons", "source_sha256",
 ] as const;
 const CARD_KEY_SET: ReadonlySet<string> = new Set(CARD_KEYS);
 
@@ -156,8 +156,8 @@ type Shape = [key: string, ok: (v: unknown) => boolean][];
 
 const CARD_SHAPE: Shape = [
   ["type", nonEmptyString], ["title", isStringOrNull], ["description", isStringOrNull], ["resource", nonEmptyString],
-  ["tags", isStringList], ["generated", isMapping], ["authority", isMapping], ["x01", isMapping],
-  ["x01_unknown", isMapping], ["needs_review", isBoolean], ["review_reasons", isStringList], ["source_sha256", nonEmptyString],
+  ["tags", isStringList], ["generated", isMapping], ["authority", isMapping], ["source_meta", isMapping],
+  ["source_meta_unknown", isMapping], ["needs_review", isBoolean], ["review_reasons", isStringList], ["source_sha256", nonEmptyString],
 ];
 const GENERATED_SHAPE: Shape = [["by", nonEmptyString], ["at", isIsoOffset]];
 const AUTHORITY_SHAPE: Shape = [["document_type", nonEmptyString], ["authority_rank", Number.isSafeInteger], ["role", nonEmptyString]];
@@ -193,8 +193,8 @@ function toCard(data: Record<string, unknown>): Card {
       authority_rank: authority.authority_rank as number,
       role: authority.role as string,
     },
-    x01: data.x01 as Record<string, unknown>,
-    x01_unknown: data.x01_unknown as Record<string, unknown>,
+    source_meta: data.source_meta as Record<string, unknown>,
+    source_meta_unknown: data.source_meta_unknown as Record<string, unknown>,
     needs_review: data.needs_review as boolean,
     review_reasons: data.review_reasons as string[],
     source_sha256: data.source_sha256 as string,

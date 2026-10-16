@@ -1,4 +1,4 @@
-// 01 관례 frontmatter → OKF 포인터 카드 매핑. 값은 원문 복사만 하며 생성·요약하지 않는다.
+// 원문 frontmatter → OKF 포인터 카드 매핑. 값은 원문 복사만 하며 생성·요약하지 않는다.
 import { isDeepStrictEqual } from "node:util";
 import type { AuthorityClass, Card, Contract, Frontmatter, SourceDoc } from "./types.ts";
 import { ISO_DATETIME_OFFSET_RE } from "./okf.ts";
@@ -16,12 +16,12 @@ export const FILENAME_GROUPS = ["prefix", "yymmddhh", "title"] as const;
 export const PRODUCER_ACTOR = "process:wiki-desk-ts";
 
 export type MappedFrontmatter = {
-  x01: Record<string, unknown>;
-  x01_unknown: Record<string, unknown>;
+  source_meta: Record<string, unknown>;
+  source_meta_unknown: Record<string, unknown>;
   title: string | null;
   description: string | null;
   docType: string | null;
-  /** 같은 정본 키에 서로 다른 값이 온 원문 키(또는 비문자열 슬롯 값) — 값은 x01_unknown에 원형 보존 */
+  /** 같은 정본 키에 서로 다른 값이 온 원문 키(또는 비문자열 슬롯 값) — 값은 source_meta_unknown에 원형 보존 */
   conflicts: string[];
   /** 빈/공백 문자열이라 null로 본 슬롯의 원문 키 */
   blanks: string[];
@@ -51,14 +51,14 @@ export function buildAliasMap(aliases: Record<string, string[]>): Map<string, st
 export function mapFrontmatter(data: Record<string, unknown>, aliases: Record<string, string[]>): MappedFrontmatter {
   const rev = buildAliasMap(aliases);
   const slots: Record<string, string | null> = { [TITLE_KEY]: null, [DESCRIPTION_KEY]: null, [DOC_TYPE_KEY]: null };
-  const x01: Record<string, unknown> = {};
-  const x01_unknown: Record<string, unknown> = {};
+  const source_meta: Record<string, unknown> = {};
+  const source_meta_unknown: Record<string, unknown> = {};
   const conflicts: string[] = [];
   const blanks: string[] = [];
   for (const [key, value] of Object.entries(data)) {
     const canonical = rev.get(key);
     if (canonical === undefined) {
-      put(x01_unknown, key, value);
+      put(source_meta_unknown, key, value);
       continue;
     }
     if (SLOT_KEYS.includes(canonical)) {
@@ -72,19 +72,19 @@ export function mapFrontmatter(data: Record<string, unknown>, aliases: Record<st
         slots[canonical] = value;
         continue;
       }
-      put(x01_unknown, key, value);
+      put(source_meta_unknown, key, value);
       conflicts.push(key);
       continue;
     }
-    if (!Object.prototype.hasOwnProperty.call(x01, canonical)) put(x01, canonical, value);
-    else if (!isDeepStrictEqual(x01[canonical], value)) {
-      put(x01_unknown, key, value);
+    if (!Object.prototype.hasOwnProperty.call(source_meta, canonical)) put(source_meta, canonical, value);
+    else if (!isDeepStrictEqual(source_meta[canonical], value)) {
+      put(source_meta_unknown, key, value);
       conflicts.push(key);
     }
   }
   return {
-    x01,
-    x01_unknown,
+    source_meta,
+    source_meta_unknown,
     title: slots[TITLE_KEY],
     description: slots[DESCRIPTION_KEY],
     docType: slots[DOC_TYPE_KEY],
@@ -136,13 +136,13 @@ export function buildCard(
   if (!inferred.matches) reasons.push(`파일명 규칙 위반: ${src.path}`);
   if (fm.kind === "error") reasons.push(`frontmatter 파싱 불가: ${fm.error}`);
 
-  // 파싱 불가·frontmatter 없음이면 빈 data → x01/x01_unknown 빈 객체, 제목은 파일명 추론
+  // 파싱 불가·frontmatter 없음이면 빈 data → source_meta/source_meta_unknown 빈 객체, 제목은 파일명 추론
   const data = fm.kind === "ok" ? fm.data : {};
   const mapped = mapFrontmatter(data, contract.frontmatter_aliases);
-  for (const key of mapped.conflicts) reasons.push(`frontmatter 키 충돌(원형은 x01_unknown): ${key}`);
+  for (const key of mapped.conflicts) reasons.push(`frontmatter 키 충돌(원형은 source_meta_unknown): ${key}`);
   for (const key of mapped.blanks) reasons.push(`frontmatter 값이 비어 있음: ${key}`);
-  // tags는 별칭 등록 여부와 무관: 등록됐으면 x01(별칭 흡수 결과), 아니면 원문 키
-  const sourceTags = readTags(Object.prototype.hasOwnProperty.call(mapped.x01, TAGS_KEY) ? mapped.x01[TAGS_KEY] : data[TAGS_KEY]);
+  // tags는 별칭 등록 여부와 무관: 등록됐으면 source_meta(별칭 흡수 결과), 아니면 원문 키
+  const sourceTags = readTags(Object.prototype.hasOwnProperty.call(mapped.source_meta, TAGS_KEY) ? mapped.source_meta[TAGS_KEY] : data[TAGS_KEY]);
   if (sourceTags.problem !== null) reasons.push(sourceTags.problem);
 
   // OKF type: 원문 document_type → 파일명 접두사 → 계약 authority.document_type
@@ -157,8 +157,8 @@ export function buildCard(
     tags: [...new Set([type, ...sourceTags.tags])],
     generated: { by: PRODUCER_ACTOR, at: nowIso },
     authority: { document_type: authority.document_type, authority_rank: authority.authority_rank, role: authority.role },
-    x01: mapped.x01,
-    x01_unknown: mapped.x01_unknown,
+    source_meta: mapped.source_meta,
+    source_meta_unknown: mapped.source_meta_unknown,
     needs_review: reasons.length > 0,
     review_reasons: reasons,
     source_sha256: src.sha256,

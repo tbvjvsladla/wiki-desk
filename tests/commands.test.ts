@@ -379,7 +379,7 @@ describe("query·read·tree", () => {
     assert.equal(queryWiki(root, ["공통어휘"]).results.length, 10); // fixture result_limit
     assert.equal(queryWiki(root, ["공통어휘"], 13).results.length, 13);
   });
-  test("frontmatter에만 있는 관례 값(x01·x01_unknown)도 검색된다", () => {
+  test("frontmatter에만 있는 관례 값(source_meta·source_meta_unknown)도 검색된다", () => {
     put("docs/plan/plan_26100109_메타.md", "---\ntitle: 메타\nouroboros_seed_id: seed_b061f7a39e47\ntags: [zebraword]\n---\n# 본문\n내용\n");
     synced();
     assert.equal(queryWiki(root, ["seed_b061f7a39e47"]).results[0].path, "docs/plan/plan_26100109_메타.md");

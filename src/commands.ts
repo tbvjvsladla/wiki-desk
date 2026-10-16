@@ -379,8 +379,8 @@ function loadDocs(w: Wiki): Loaded[] {
     const rel = cardRel(w, src);
     const parsed = exists(w.root, rel) ? tryParseCard(readText(w.root, rel), rel) : null;
     const card = parsed !== null && "card" in parsed ? parsed.card : null;
-    // 카드 메타: type·tags·관례 키(x01)·미매핑 원문 키(x01_unknown) 값 — frontmatter에만 있는 식별자도 검색되게
-    const meta = card === null ? [] : [card.type, ...card.tags, ...scalars(card.x01), ...scalars(card.x01_unknown)];
+    // 카드 메타: type·tags·관례 키(source_meta)·미매핑 원문 키(source_meta_unknown) 값 — frontmatter에만 있는 식별자도 검색되게
+    const meta = card === null ? [] : [card.type, ...card.tags, ...scalars(card.source_meta), ...scalars(card.source_meta_unknown)];
     const inferred = inferFromPath(src, w.contract.filename_pattern);
     const title = card?.title ?? (inferred.matches ? inferred.koTitle : path.posix.basename(src));
     return {

@@ -21,8 +21,8 @@
 | `tags` | 문서 종류 + 원문 frontmatter `tags`의 문자열 원소 | 관측/원문 값 |
 | `authority` | 계약 `authority_rules` 첫 일치 또는 fallback의 `{document_type, authority_rank, role}` | 계약 도출(탐색 순서용, 승인 판정 아님) |
 | `generated` | `{by: process:wiki-desk-ts, at: <UTC ISO>}` | 카드 작성 이력(확인 이력 아님) |
-| `x01` | 01 관례 키(정본 이름으로 별칭 흡수) | 원문 값 |
-| `x01_unknown` | 매핑되지 않은 원문 키, 원형 보존 | 원문 값 |
+| `source_meta` | 계약 `frontmatter_aliases`의 정본 키로 흡수한 원문 키 | 원문 값 |
+| `source_meta_unknown` | 매핑되지 않은 원문 키, 원형 보존 | 원문 값 |
 | `needs_review` / `review_reasons` | 파일명 규칙 위반·frontmatter 파싱 불가·닫힘 누락·UTF-8 아님·빈 title 등. `needs_review`는 사유가 있을 때만 true | 판정 불가 표면화 |
 | (그 밖의 키) | 사람이 카드에 추가한 OKF 키(`verified` 등) | 원형 보존 |
 | `source_sha256` | 원문 내용 해시 | stale 판정용 관측값 |

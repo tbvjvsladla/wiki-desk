@@ -1,69 +1,34 @@
 {
   "schema_version": 1,
-  "project_name": "01_RAG_Agent",
+  "project_name": "example-project",
   "wiki_dir": "__llm-wiki",
   "source_roots": [
-    "docs",
-    "letter"
+    "docs"
   ],
-  "excluded_roots": [],
+  "excluded_roots": [
+    "docs/private"
+  ],
   "source_suffixes": [
     ".md"
   ],
   "authority_rules": [
     {
-      "pattern": "letter/responses/**",
-      "document_type": "response",
+      "pattern": "docs/reports/**",
+      "document_type": "report",
       "authority_rank": 90,
       "role": "result-report"
     },
     {
-      "pattern": "letter/issued/**",
-      "document_type": "issued",
-      "authority_rank": 80,
-      "role": "directive"
-    },
-    {
-      "pattern": "docs/devlog/**",
-      "document_type": "devlog",
+      "pattern": "docs/decisions/**",
+      "document_type": "decision",
       "authority_rank": 70,
-      "role": "result-evidence"
+      "role": "decision-record"
     },
     {
-      "pattern": "docs/h_report/**",
-      "document_type": "h_report",
-      "authority_rank": 65,
-      "role": "executive-summary"
-    },
-    {
-      "pattern": "docs/commission/**",
-      "document_type": "commission",
-      "authority_rank": 60,
-      "role": "coordination"
-    },
-    {
-      "pattern": "docs/paper/**",
-      "document_type": "paper",
-      "authority_rank": 50,
-      "role": "external-evidence"
-    },
-    {
-      "pattern": "docs/plan/**",
+      "pattern": "docs/plans/**",
       "document_type": "plan",
       "authority_rank": 40,
       "role": "intent"
-    },
-    {
-      "pattern": "docs/request/**",
-      "document_type": "request",
-      "authority_rank": 35,
-      "role": "gate-request"
-    },
-    {
-      "pattern": "docs/interview/**",
-      "document_type": "interview",
-      "authority_rank": 30,
-      "role": "decision-record"
     }
   ],
   "fallback": {
@@ -73,21 +38,8 @@
   },
   "copy_policy": "path_reference",
   "frontmatter_aliases": {
-    "created": [],
-    "status": [],
-    "related_issued": [],
-    "ouroboros_interview_id": [],
-    "ouroboros_seed_id": [],
     "related_plan": [
       "plan"
-    ],
-    "related_design": [
-      "design"
-    ],
-    "related_devlog": [],
-    "related_interview": [],
-    "branches": [
-      "branch"
     ]
   },
   "filename_pattern": "^(?<prefix>[a-z][a-z_]*)_(?<yymmddhh>\\d{8})_(?<title>.+)\\.md$",

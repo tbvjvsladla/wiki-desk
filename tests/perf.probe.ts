@@ -9,10 +9,11 @@ import { queryTokens } from "../src/tokenize.ts";
 import { findSpans } from "../src/query.ts";
 import { headingTree } from "../src/tree.ts";
 
-// 사용: node tests/perf.probe.ts <git 저장소> <커밋> — 코퍼스는 그 커밋의 docs/·letter/ md
-const [REPO, COMMIT] = process.argv.slice(2);
-if (REPO === undefined || COMMIT === undefined) throw new Error("사용법: node tests/perf.probe.ts <git 저장소> <커밋>");
-/** 목표 규모(작업 지시의 성능 기준: 약 250파일·3.5MB) */
+// 사용: node tests/perf.probe.ts <git 저장소> <커밋> <원문 루트(쉼표 구분)> <질의>... — 코퍼스는 그 커밋의 루트 아래 md
+const USAGE = "사용법: node tests/perf.probe.ts <git 저장소> <커밋> <원문 루트(쉼표 구분)> <질의>...";
+const [REPO, COMMIT, ROOTS, ...QUERY_ARGS] = process.argv.slice(2);
+if (REPO === undefined || COMMIT === undefined || ROOTS === undefined || QUERY_ARGS.length === 0) throw new Error(USAGE);
+/** 측정 목표 규모(문서 수·바이트). 실코퍼스가 이보다 작으면 복제본으로 채운다 */
 const TARGET_DOCS = 250;
 const TARGET_BYTES = 3.5e6;
 /** 반복 측정 횟수(중앙값 사용) */
@@ -26,7 +27,8 @@ const CFG: SearchConfig = {
   result_limit: 10,
   spans_per_result: 3,
 };
-const QUERIES = [["gemini-embedding-2 임베딩 차원"], ["agent_config.yaml multi_turn", "멀티턴 설정"], ["structured_output"], ["체크포인터 세션 관리", "checkpointer"]];
+// 질의 인자 1개 = 질의 1건. "|"로 나누면 같은 질의의 OR 변형(--terms 여러 개와 같다)
+const QUERIES = QUERY_ARGS.map((q) => q.split("|"));
 
 const git = (...args: string[]): string => execFileSync("git", ["-C", REPO, ...args], { encoding: "utf8", maxBuffer: 1 << 28 });
 
@@ -50,7 +52,7 @@ function time<T>(fn: () => T): [T, number] {
   return [r, performance.now() - t0];
 }
 
-const paths = git("ls-tree", "-r", "--name-only", "-z", COMMIT, "--", "docs", "letter").split("\0").filter((p) => p.endsWith(".md"));
+const paths = git("ls-tree", "-r", "--name-only", "-z", COMMIT, "--", ...ROOTS.split(",")).split("\0").filter((p) => p.endsWith(".md"));
 const real = paths.map((p) => toDoc(p, git("show", `${COMMIT}:${p}`)));
 const realBytes = real.reduce((n, d) => n + Buffer.byteLength(d.lines.join("\n")), 0);
 const docs = [...real];
