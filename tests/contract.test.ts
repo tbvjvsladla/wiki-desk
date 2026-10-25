@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { findContract, validateContract, authorityFor, listSources, WIKI_DIRS, CONTRACT_FILE, RESERVED_WIKI_FILES } from "../src/contract.ts";
+import { findContract, validateContract, authorityFor, listSources, WIKI_DIRS, CONTRACT_FILE, RESERVED_WIKI_FILES, SEARCH_V32_KEYS } from "../src/contract.ts";
 import type { Contract } from "../src/types.ts";
 
 const FIXTURE = path.join(import.meta.dirname, "fixtures", "contract", "valid.json");
@@ -104,10 +104,37 @@ describe("validateContract", () => {
       ["search.span_max_lines", (c) => { c.search.span_max_lines = 2.5; }],
       ["search.result_limit", (c) => { c.search.result_limit = 0; }],
       ["search.spans_per_result", (c) => { c.search.spans_per_result = -2; }],
+      ["search.match_lines_max", (c) => { c.search.match_lines_max = -1; }],
+      ["search.match_lines_max", (c) => { c.search.match_lines_max = 1.5; }],
+      ["search.related_max", (c) => { c.search.related_max = "5"; }],
+      ["search.span_group_coverage", (c) => { c.search.span_group_coverage = null; }],
     ];
     for (const [label, mutate] of bad) {
       assert.throws(() => validateContract(withChange(mutate)), new RegExp(label), label);
     }
+  });
+});
+
+describe("3.2.0 search 필수 키", () => {
+  const KEYS = ["match_lines_max", "related_max", "span_group_coverage"];
+  test("키가 빠지면 넣을 키 이름·예시 값·업그레이드 안내를 담은 오류로 거부한다", () => {
+    for (const key of KEYS) {
+      const raw = withChange((c) => { delete c.search[key]; });
+      assert.throws(() => validateContract(raw), new RegExp(`search\\.${key}.*예: "${key}": .*installation\\.md`), key);
+    }
+  });
+  test("0은 '안내 끔'으로 허용한다(정수 ≥ 0)", () => {
+    const raw = withChange((c) => { c.search.match_lines_max = 0; c.search.related_max = 0; });
+    assert.equal(validateContract(raw).search.match_lines_max, 0);
+  });
+  test("예시 계약은 3.2.0 키를 모두 갖고 검증을 통과한다", () => {
+    const example = JSON.parse(fs.readFileSync(path.join(import.meta.dirname, "..", "assets", "project-contract.example.json"), "utf8"));
+    for (const key of KEYS) assert.ok(Object.hasOwn(example.search, key), key);
+    assert.doesNotThrow(() => validateContract(example));
+  });
+  test("오류 안내의 예시 값 = 예시 계약의 출하 기본값(측정 = 출하)", () => {
+    const example = JSON.parse(fs.readFileSync(path.join(import.meta.dirname, "..", "assets", "project-contract.example.json"), "utf8"));
+    for (const [key, spec] of Object.entries(SEARCH_V32_KEYS)) assert.equal(example.search[key], spec.example, key);
   });
 });
 
@@ -130,7 +157,7 @@ describe("layout 불변식 (TDA-1, CR-8)", () => {
     assert.deepEqual(validateContract(raw).layout, { cards_dir: "cards", cache_dir: "cards-cache", archive_dir: "cards_archive" });
   });
   test("위키 루트 예약 파일명과 같은 이름을 거부한다", () => {
-    assert.deepEqual([...RESERVED_WIKI_FILES].sort(), [".gitignore", "contract.json", "index.md", "log.md", "receipt.json"]);
+    assert.deepEqual([...RESERVED_WIKI_FILES].sort(), [".gitignore", "contract.json", "glossary.json", "index.md", "log.md", "receipt.json"]);
     for (const name of RESERVED_WIKI_FILES) {
       for (const key of ["cards_dir", "cache_dir", "archive_dir"]) {
         const raw = withChange((c) => { c.layout[key] = name; });

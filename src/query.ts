@@ -9,13 +9,15 @@
 //    질의 토큰을 많이 덮는 창이 이긴다).
 // 4) 블록끼리는 겹치지 않으므로 블록별 창을 점수순으로 정렬해 상위 spans_per_result개를 반환한다.
 //    블록 간 동점이면 줄 수가 적은 창(밀도↑), 그다음 앞선 창.
+//    search.span_group_coverage = true면 첫 구간은 같고, 둘째부터는 아직 덮지 않은 질의 그룹을 더 많이 덮는 창을 먼저 고른다
+//    (같은 그룹만 반복해 덮는 창 대신 다른 대상의 근거 구간을 보여 준다). 그룹 = term group의 토큰 집합.
 // 줄 번호는 원문 파일 기준 1-based(end 포함)이며 frontmatter 줄도 센다.
-import type { HeadingNode, IndexDoc, SearchConfig, Span } from "./types.ts";
+import type { HeadingNode, IndexDoc, SearchConfig, Section, Span } from "./types.ts";
 import { normalize, tokenize } from "./tokenize.ts";
 import { headingPathAt, scanLines } from "./tree.ts";
 
 type Block = { start: number; end: number };
-type Candidate = { start: number; end: number; score: number };
+type Candidate = { start: number; end: number; score: number; tokens?: Set<string> };
 
 /** 본문 블록 분할(1-based 줄 번호, 끝의 빈 줄 제외) */
 export function splitBlocks(lines: string[], bodyStartLine: number): Block[] {
@@ -102,11 +104,47 @@ function bestWindow(block: Block, matches: (Map<string, number> | null)[], weigh
   return best.score > 0 ? best : null;
 }
 
+/** 탐욕 선택: 첫 구간은 최고점, 그다음부터 아직 덮지 않은 그룹 수가 가장 많은 것(동점이면 점수순). cands는 점수순 정렬 상태 */
+function byGroupCoverage(cands: Candidate[], groups: string[][], n: number): Candidate[] {
+  const left = [...cands];
+  const covered = new Set<number>();
+  const out: Candidate[] = [];
+  const gain = (c: Candidate): number => groups.filter((g, i) => !covered.has(i) && g.some((t) => c.tokens!.has(t))).length;
+  while (out.length < n && left.length > 0) {
+    let best = 0;
+    if (out.length > 0) for (let i = 1; i < left.length; i++) if (gain(left[i]) > gain(left[best])) best = i;
+    const [c] = left.splice(best, 1);
+    groups.forEach((g, i) => { if (g.some((t) => c.tokens!.has(t))) covered.add(i); });
+    out.push(c);
+  }
+  return out;
+}
+
+/** 줄이 속한 가장 깊은 헤딩 절. 트리 밖이면(빈 문서) 줄 하나짜리 절 */
+export function sectionAt(tree: HeadingNode[], line: number): Section {
+  let best: HeadingNode | null = null;
+  let level = tree;
+  for (;;) {
+    const hit = level.find((n) => n.start <= line && line <= n.end);
+    if (hit === undefined) break;
+    best = hit;
+    level = hit.children;
+  }
+  return best === null ? { heading: "", start: line, end: line } : { heading: best.title, start: best.start, end: best.end };
+}
+
+/** 본문에서 질의 토큰이 하나라도 나오는 줄 번호(1-based, 오름차순) */
+export function matchingLines(doc: IndexDoc, weights: ReadonlyMap<string, number>): number[] {
+  const out: number[] = [];
+  for (let n = doc.bodyStartLine; n <= doc.lines.length; n++) if (lineMatches(doc.lines[n - 1], weights) !== null) out.push(n);
+  return out;
+}
+
 /**
  * 질의에 가장 잘 맞는 구간들(최대 spans_per_result개, 점수순).
  * weights = 질의 토큰 → idf(index.termWeights). 매칭 블록이 없으면 빈 배열.
  */
-export function findSpans(doc: IndexDoc, tree: HeadingNode[], weights: ReadonlyMap<string, number>, cfg: SearchConfig): Span[] {
+export function findSpans(doc: IndexDoc, tree: HeadingNode[], weights: ReadonlyMap<string, number>, cfg: SearchConfig, groups: string[][] = []): Span[] {
   const cands: Candidate[] = [];
   for (const block of splitBlocks(doc.lines, doc.bodyStartLine)) {
     const matches: (Map<string, number> | null)[] = [];
@@ -118,13 +156,18 @@ export function findSpans(doc: IndexDoc, tree: HeadingNode[], weights: ReadonlyM
     }
     if (!hit) continue;
     const c = bestWindow(block, matches, weights, cfg);
-    if (c !== null) cands.push(c);
+    if (c === null) continue;
+    const tokens = new Set<string>();
+    for (let n = c.start; n <= c.end; n++) for (const t of matches[n - block.start]?.keys() ?? []) tokens.add(t);
+    cands.push({ ...c, tokens });
   }
   cands.sort((x, y) => y.score - x.score || x.end - x.start - (y.end - y.start) || x.start - y.start);
-  return cands.slice(0, cfg.spans_per_result).map((c) => ({
+  const picked = cfg.span_group_coverage ? byGroupCoverage(cands, groups, cfg.spans_per_result) : cands.slice(0, cfg.spans_per_result);
+  return picked.map((c) => ({
     ref: `${doc.path}:${c.start}-${c.end}`,
     heading_path: headingPathAt(tree, c.start),
     start: c.start,
     end: c.end,
+    section: sectionAt(tree, c.start),
   }));
 }

@@ -12,10 +12,12 @@ import { splitFrontmatter, emitYaml, locate, bodyText } from "./frontmatter.ts";
 import { buildCard, inferFromPath } from "./mapping.ts";
 import { renderCard, tryParseCard, checkConcept } from "./okf.ts";
 import { headingTree } from "./tree.ts";
-import { queryTokens } from "./tokenize.ts";
+import { normalize, queryTokens } from "./tokenize.ts";
 import { loadOrRebuild, scoreQuery, termWeights } from "./index.ts";
-import { findSpans } from "./query.ts";
+import { findSpans, matchingLines } from "./query.ts";
+import { buildLinkIndex, relatedFor } from "./links.ts";
 import { parseRef, readSpan } from "./read.ts";
+import { DEFAULT_GLOSSARY, GLOSSARY_FILE, expandTerms, extractPairs, filterCommon, filterUnambiguous, parseGlossary } from "./glossary.ts";
 
 // 위키 bundle 안 고정 파일명. OKF §3.1 예약 파일과 운영 파일.
 const GITIGNORE_FILE = ".gitignore";
@@ -195,6 +197,8 @@ export function initWiki(root: string, contractFile: string, opts: { apply: bool
     { rel: inWiki(w, GITIGNORE_FILE), data: gitignoreBytes(contract) },
     { rel: inWiki(w, INDEX_FILE), data: Buffer.from(renderIndex(w, [])) },
     { rel: inWiki(w, LOG_FILE), data: Buffer.from(appendLog(LOG_HEADER, opts.now, ["init: 위키 생성"])) },
+    // 기본 용어집(자동 추출 켬) — receipt 소유, 사람이 고치면 remove가 보존한다
+    { rel: inWiki(w, GLOSSARY_FILE), data: Buffer.from(DEFAULT_GLOSSARY) },
   ];
   if (opts.apply) commit(w, writes, { files: {} });
   return { applied: opts.apply, wiki_dir: w.wikiDir, writes: [...writes.map((x) => x.rel), inWiki(w, RECEIPT_FILE)] };
@@ -396,7 +400,27 @@ function loadDocs(w: Wiki): Loaded[] {
   });
 }
 
-export function queryWiki(root: string, termGroups: string[], limit?: number) {
+export type QueryOptions = { withText?: boolean };
+
+/**
+ * glossary.json이 있으면 묶음(수동 + auto_extract 시 말뭉치 괄호 병기 중 모호하지 않고 일반어가 아닌 쌍)을 돌려준다.
+ * 없으면 null(확장 안 함).
+ */
+function glossaryBundles(w: Wiki, docs: IndexDoc[]): string[][] | null {
+  const rel = inWiki(w, GLOSSARY_FILE);
+  if (!exists(w.root, rel)) return null;
+  const g = parseGlossary(readText(w.root, rel));
+  if (!g.auto_extract) return g.manual;
+  const pairs = filterUnambiguous(docs.flatMap((d) => extractPairs(d.lines, d.bodyStartLine)));
+  const texts = docs.map((d) => normalize(d.lines.join("\n")));
+  const df = (term: string): number => {
+    const t = normalize(term);
+    return texts.filter((x) => x.includes(t)).length;
+  };
+  return [...g.manual, ...filterCommon(pairs, df, docs.length)];
+}
+
+export function queryWiki(root: string, termGroups: string[], limit?: number, opts: QueryOptions = {}) {
   if (limit !== undefined && !(Number.isInteger(limit) && limit > 0)) throw new Error(`limit는 양의 정수: ${limit}`);
   const tokens = queryTokens(termGroups);
   if (tokens.length === 0) throw new Error(`질의어가 색인 가능한 토큰을 만들지 못함(1글자 영숫자·기호만): ${JSON.stringify(termGroups)}`);
@@ -404,6 +428,9 @@ export function queryWiki(root: string, termGroups: string[], limit?: number) {
   const started = performance.now();
   const loaded = loadDocs(w);
   const docs = loaded.map((l) => l.doc);
+  const bundles = glossaryBundles(w, docs);
+  const expansion = bundles === null ? null : expandTerms(termGroups, bundles);
+  const searchTokens = expansion === null ? tokens : queryTokens(expansion.groups);
   const cacheFile = cacheRel(w, INDEX_CACHE_FILE);
   const cached = exists(w.root, cacheFile) ? readText(w.root, cacheFile) : null;
   const { index, json, rebuilt, cacheReset } = loadOrRebuild(cached, docs);
@@ -414,15 +441,37 @@ export function queryWiki(root: string, termGroups: string[], limit?: number) {
   }
   const cfg = w.contract.search;
   const byPath = new Map(docs.map((d) => [d.path, d]));
-  const weights = termWeights(index, tokens);
+  const weights = termWeights(index, searchTokens);
+  const dateOf = (p: string): string | null => {
+    const inf = inferFromPath(p, w.contract.filename_pattern);
+    return inf.matches ? inf.yymmddhh : null;
+  };
+  // 질의 그룹별 토큰(P4b 커버리지 판정) — 확장된 그룹 포함, 색인에 있는 토큰만
+  const groupTokens = (expansion === null ? termGroups : expansion.groups).map((g) => queryTokens([g]).filter((t) => weights.has(t)));
   const results: QueryResult[] = scoreQuery(index, weights, cfg).slice(0, limit ?? cfg.result_limit).map(({ path: p, score }) => {
     const doc = byPath.get(p)!;
     const tree = headingTree(doc.lines, doc.bodyStartLine);
-    return { path: p, score, authority_rank: doc.authorityRank, title: doc.title, spans: findSpans(doc, tree, weights, cfg) };
+    const spans = findSpans(doc, tree, weights, cfg, groupTokens);
+    // 더 읽을 곳(P1a): 구간이 덮지 못한 일치 줄 — 에이전트가 '모른다' 전에 read할 범위를 고르게 한다
+    const inSpan = (n: number): boolean => spans.some((sp) => sp.start <= n && n <= sp.end);
+    return {
+      path: p, score, authority_rank: doc.authorityRank, title: doc.title, lines_total: doc.lines.length,
+      // ref 형식(path:N-N)으로 낸다 — 줄 번호만 주면 에이전트가 끝 줄 없는 `path:N`으로 인용한다(2차 봉인 평가 형식 오류의 출처)
+      match_lines: matchingLines(doc, weights).filter((n) => !inSpan(n)).slice(0, cfg.match_lines_max).map((n) => `${p}:${n}-${n}`),
+      spans: opts.withText ? spans.map((sp) => ({ ...sp, text: readSpan(doc.lines, sp.start, sp.end) })) : spans,
+    };
   });
+  // 관련·이후 문서(P2): 순위와 별도 칸. 결과 구간 원문의 식별자·명시 참조·사이클 ID로 결정론 계산
+  const links = buildLinkIndex(docs.map((d) => ({ path: d.path, date: dateOf(d.path), title: d.title, lines: d.lines })));
+  const related = relatedFor(links, results.map((r) => ({
+    path: r.path, spanLines: r.spans.flatMap((sp) => byPath.get(r.path)!.lines.slice(sp.start - 1, sp.end)),
+  })), cfg.related_max, searchTokens);
   return {
-    terms: termGroups, query_tokens: tokens, unmatched_tokens: tokens.filter((t) => !weights.has(t)),
-    results,
+    terms: termGroups,
+    // glossary.json이 있을 때만 키를 낸다(없는 프로젝트의 출력은 이전과 같다)
+    ...(expansion === null ? {} : { expanded_terms: expansion.added }),
+    query_tokens: searchTokens, unmatched_tokens: searchTokens.filter((t) => !weights.has(t)),
+    results, related,
     stale: loaded.filter((l) => l.card !== null && l.card.source_sha256 !== l.doc.sha256).map((l) => l.doc.path),
     missing_cards: loaded.filter((l) => l.card === null && !l.invalid).map((l) => l.doc.path),
     invalid_cards: loaded.filter((l) => l.invalid).map((l) => l.doc.path),

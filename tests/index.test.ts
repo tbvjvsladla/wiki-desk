@@ -14,6 +14,9 @@ const CFG: SearchConfig = {
   span_max_lines: 8,
   result_limit: 10,
   spans_per_result: 2,
+  match_lines_max: 10,
+  related_max: 5,
+  span_group_coverage: false,
 };
 
 /** 호출자(commands) 경로 재현: term group → 토큰 → idf 가중치 1회 계산 → 점수 */

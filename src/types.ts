@@ -36,6 +36,12 @@ export type SearchConfig = {
   span_max_lines: number;
   result_limit: number;
   spans_per_result: number;
+  /** 결과마다 보여 줄 문서 안 질의어 일치 줄 번호 최대 수(0 = 끔) */
+  match_lines_max: number;
+  /** 응답의 관련·이후 문서 칸 최대 수(0 = 끔) */
+  related_max: number;
+  /** 둘째 이후 구간은 아직 덮지 않은 질의 그룹을 우선 */
+  span_group_coverage: boolean;
 };
 
 /** 원문 1건(불변) */
@@ -94,13 +100,21 @@ export type IndexDoc = {
   authorityRank: number;
 };
 
-export type Span = { ref: string; heading_path: string[]; start: number; end: number };
+/** 구간이 속한 헤딩 절(서문이면 heading = ""). 줄 번호 1-based, end 포함 */
+export type Section = { heading: string; start: number; end: number };
+
+/** text는 query --with-text일 때만 붙는 구간 원문 */
+export type Span = { ref: string; heading_path: string[]; start: number; end: number; section: Section; text?: string };
 
 export type QueryResult = {
   path: string;
   score: number;
   authority_rank: number;
   title: string;
+  /** 원문 총 줄 수(read 범위를 정할 때 쓴다) */
+  lines_total: number;
+  /** 구간 밖에서 질의 토큰이 나온 줄의 인용 가능한 ref(`path:N-N`, 줄 순서, 최대 search.match_lines_max개) */
+  match_lines: string[];
   spans: Span[];
 };
 

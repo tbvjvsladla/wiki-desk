@@ -39,6 +39,9 @@ const CONTRACT: Contract = {
     span_max_lines: 40,
     result_limit: 10,
     spans_per_result: 2,
+    match_lines_max: 10,
+    related_max: 5,
+    span_group_coverage: false,
   },
 };
 const AUTH: AuthorityClass = { document_type: "plan_rule", authority_rank: 4, role: "세부 계획" };

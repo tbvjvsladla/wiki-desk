@@ -13,6 +13,9 @@ const CFG: SearchConfig = {
   span_max_lines: 4,
   result_limit: 10,
   spans_per_result: 2,
+  match_lines_max: 10,
+  related_max: 5,
+  span_group_coverage: false,
 };
 
 const LINES = [
@@ -72,7 +75,7 @@ test("findSpans: 서로 다른 질의 토큰을 많이 덮는 블록이 1순위,
   const tree = headingTree(LINES, 4);
   const spans = findSpans(DOC, tree, weights("gemini-embedding-2 임베딩 차원"), CFG);
   assert.equal(spans.length, CFG.spans_per_result);
-  assert.deepEqual(spans[0], { ref: "docs/a.md:6-9", heading_path: ["설정"], start: 6, end: 9 });
+  assert.deepEqual(spans[0], { ref: "docs/a.md:6-9", heading_path: ["설정"], start: 6, end: 9, section: { heading: "설정", start: 6, end: 20 } });
 });
 
 test("findSpans: 반복보다 커버리지 — tf 포화로 '차원' 반복 블록이 밀린다", () => {
@@ -112,7 +115,7 @@ test("findSpans: span끼리 겹치지 않고 spans_per_result를 넘지 않는�
 test("findSpans: 서문 매칭은 빈 heading_path", () => {
   const tree = headingTree(LINES, 4);
   const spans = findSpans(DOC, tree, weights("서문"), CFG);
-  assert.deepEqual(spans, [{ ref: "docs/a.md:4-4", heading_path: [], start: 4, end: 4 }]);
+  assert.deepEqual(spans, [{ ref: "docs/a.md:4-4", heading_path: [], start: 4, end: 4, section: { heading: "", start: 4, end: 5 } }]);
 });
 
 test("findSpans: 헤딩만 매칭돼도 섹션 첫 내용과 함께 나온다", () => {
@@ -130,4 +133,17 @@ test("findSpans: 매칭 없음·빈 가중치 → 빈 배열", () => {
 test("findSpans: 부분 문자열만 겹치고 토큰은 다르면 매칭 아님(사전 필터 오탐 제거)", () => {
   const doc: IndexDoc = { ...DOC, lines: ["configuration 설명"], bodyStartLine: 1 };
   assert.deepEqual(findSpans(doc, headingTree(doc.lines, 1), weights("config"), CFG), []);
+});
+
+// P4b 그룹 커버리지 knob: 둘째 이후 구간은 아직 덮지 않은 질의 그룹을 우선
+test("findSpans span_group_coverage: 같은 그룹만 덮는 두 블록 대신 다른 그룹 블록을 둘째로 고른다", () => {
+  const lines = ["# 문서", "임베딩 차원 임베딩 차원", "", "임베딩 차원 다시", "", "포트 번호", ""];
+  const d: IndexDoc = { path: "g.md", sha256: "x", title: "", metaText: "", lines, bodyStartLine: 1, authorityRank: 0 };
+  const tree = headingTree(lines, 1);
+  const w = weights("임베딩 차원 포트");
+  const groups = [tokenize("임베딩 차원"), tokenize("포트")];
+  const off = findSpans(d, tree, w, { ...CFG, spans_per_result: 2 }, groups).map((s) => s.start);
+  const on = findSpans(d, tree, w, { ...CFG, spans_per_result: 2, span_group_coverage: true }, groups).map((s) => s.start);
+  assert.deepEqual(off, [1, 4]);
+  assert.deepEqual(on, [1, 6]);
 });

@@ -3,7 +3,7 @@ import { parseArgs } from "node:util";
 import { initWiki, syncWiki, queryWiki, readRef, treeOf, checkWiki, statusWiki, removeWiki } from "./commands.ts";
 
 const USAGE = `명령: init --contract <파일> [--apply] | sync [--apply] [--accept-removed P]... [--relocate OLD=NEW]...
-      query --terms <질의>... [--limit N] | read <경로:시작-끝> | tree <경로> | check | status | remove [--apply]
+      query --terms <질의>... [--limit N] [--with-text] | read <경로:시작-끝> | tree <경로> | check | status | remove [--apply]
 공통: --root <프로젝트 루트>(생략 시 현재 디렉터리)`;
 
 const { values, positionals } = parseArgs({
@@ -14,6 +14,7 @@ const { values, positionals } = parseArgs({
     apply: { type: "boolean", default: false },
     terms: { type: "string", multiple: true },
     limit: { type: "string" },
+    "with-text": { type: "boolean", default: false },
     "accept-removed": { type: "string", multiple: true },
     relocate: { type: "string", multiple: true },
   },
@@ -41,7 +42,7 @@ const run: Record<string, () => unknown> = {
     acceptRemoved: values["accept-removed"] ?? [],
     relocate: (values.relocate ?? []).map(pair),
   }),
-  query: () => queryWiki(root, values.terms ?? [], limit),
+  query: () => queryWiki(root, values.terms ?? [], limit, { withText: values["with-text"] }),
   read: () => readRef(root, need(arg, "<경로:시작-끝>")),
   tree: () => treeOf(root, need(arg, "<경로>")),
   check: () => checkWiki(root),
@@ -53,6 +54,7 @@ const name = need(cmd, "<명령>");
 if (!Object.hasOwn(run, name)) throw new Error(`알 수 없는 명령: ${name}\n${USAGE}`);
 const action = run[name];
 const result = action();
-process.stdout.write(JSON.stringify(result, null, 2) + "\n");
+// query는 구간 원문을 실어 길다 — 들여쓰기 없이 낸다(Bash 출력 한도·토큰 절약). 나머지 명령은 사람이 읽기 쉽게 들여쓴다
+process.stdout.write((cmd === "query" ? JSON.stringify(result) : JSON.stringify(result, null, 2)) + "\n");
 // check는 문제가 있으면 exit 1 (기계 판정용)
 if (cmd === "check" && !(result as { ok: boolean }).ok) process.exitCode = 1;

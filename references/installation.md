@@ -1,4 +1,4 @@
-# 설치·초기화·제거 (TS판)
+# 설치·초기화·업그레이드·제거 (TS판)
 
 ## 전제
 - Node.js 24 이상. `.ts`를 빌드 없이 직접 실행한다. 런타임 npm 의존성은 없다. 없으면 차단 사유를 보고하고 자동 설치하지 않는다.
@@ -14,13 +14,24 @@
 | 명령 | 쓰기 |
 |---|---|
 | `node .claude/skills/wiki-desk/src/cli.ts init --contract <합의 계약 파일>` | 없음 — 생성 계획 출력 |
-| 위 명령 + `--apply` | `<wiki_dir>/contract.json`·`receipt.json`·`.gitignore`(캐시 제외)·`index.md`·`log.md` 생성 |
+| 위 명령 + `--apply` | `<wiki_dir>/contract.json`·`receipt.json`·`.gitignore`(캐시 제외)·`index.md`·`log.md`·`glossary.json`(자동 추출 켬) 생성 |
 | `… sync` → `… sync --apply` | 카드 생성 |
 | `… check` | 없음 |
 
 - 기존 위키(`__llm-wiki/`·`__llm_wiki/` 어느 쪽이든)가 있으면 `init`은 거부한다(덮어쓰기 없음).
 - `wiki_dir`는 계약의 리터럴 그대로다(`__llm-wiki`와 `__llm_wiki`는 다른 값).
 - 적용 후 `status`·`check`·원문 불변(`git diff --diff-filter=MD -- <source_roots>` 공집합)을 확인한다.
+
+- 설치한 프로젝트의 헌장(작업 절차·문서 규칙)에 넣을 항목은 [charter.md](charter.md)를 따른다.
+
+## 업그레이드 (3.0.x → 3.2.0)
+3.2.0은 계약에 `search` 필수 키를 더했다. 검증기는 기본값을 채우지 않으므로, 스킬만 바꾸면 `query`·`check` 등이 누락 키를 알려 주는 오류로 멈춘다(예: `계약 search.match_lines_max: 필수 필드 누락 — 예: "match_lines_max": 10 …`).
+1. 스킬 폴더를 새 배포본으로 교체하고 `node scripts/package-manifest.ts --check`·`node --test`를 확인한다.
+2. `<wiki_dir>/contract.json`의 `search`에 새 키를 넣는다. 값은 `assets/project-contract.example.json`의 같은 키를 그대로 쓴다(측정·출하된 기본값).
+3. `<wiki_dir>/glossary.json`이 없으면 `assets/glossary.example.json`을 그 이름으로 복사한다(자동 추출 켬).
+4. `status`·`check`·`query`가 exit 0인지 확인한다. 카드 형식은 바뀌지 않았으므로 **재입고는 필요 없다**(`sync` 계획의 생성·갱신 0건). 검색 색인 캐시는 첫 질의 때 자동으로 다시 만든다.
+
+2.x에서 올리면 카드 형식(관례 메타 키 이름)도 바뀐다: 위 절차 뒤 `sync`로 계획을 보고 `sync --apply`로 카드 전체를 다시 쓴다. 적용 전후 원문 경로 집합이 같은지(누락 0) 확인한다.
 
 ## 제거
 | 명령 | 동작 |

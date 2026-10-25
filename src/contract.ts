@@ -5,12 +5,13 @@ import path from "node:path";
 import { isSafeRelative, isBelow, canonicalRoot, resolveInside, readRegular } from "./fs-safety.ts";
 import { buildAliasMap, FILENAME_GROUPS } from "./mapping.ts";
 import type { AuthorityClass, Contract } from "./types.ts";
+import { GLOSSARY_FILE } from "./glossary.ts";
 
 /** types.ts `Contract.wiki_dir` 리터럴과 동일. 서로 교정하지 않는다. */
 export const WIKI_DIRS = ["__llm-wiki", "__llm_wiki"] as const;
 export const CONTRACT_FILE = "contract.json";
 /** 위키 루트에 놓이는 고정 파일명. layout 디렉터리 이름(첫 segment)으로 쓸 수 없다. */
-export const RESERVED_WIKI_FILES: ReadonlySet<string> = new Set([CONTRACT_FILE, "index.md", "log.md", ".gitignore", "receipt.json"]);
+export const RESERVED_WIKI_FILES: ReadonlySet<string> = new Set([CONTRACT_FILE, "index.md", "log.md", ".gitignore", "receipt.json", GLOSSARY_FILE]);
 const LAYOUT_KEYS = ["cards_dir", "cache_dir", "archive_dir"] as const;
 const SCHEMA_VERSION = 1;
 const COPY_POLICY = "path_reference";
@@ -33,6 +34,16 @@ const REQUIRED = ["schema_version", "project_name", "wiki_dir", "source_roots", 
 const FIELD_BOOST_KEYS = ["title", "heading", "meta", "body"] as const;
 const POSITIVE_REALS = ["bm25_k1", "bm25_b", "authority_weight"] as const;
 const POSITIVE_INTEGERS = ["span_max_lines", "result_limit", "spans_per_result"] as const;
+/**
+ * 3.2.0에 더한 search 필수 키와 안내용 예시 값(assets/project-contract.example.json과 같은 값).
+ * 검증기는 기본값을 채우지 않는다 — 빠지면 넣을 키·값을 알려 주고 멈춘다(이전 버전 계약의 업그레이드 경로).
+ */
+export const SEARCH_V32_KEYS = {
+  match_lines_max: { kind: "count", example: 20 },
+  related_max: { kind: "count", example: 5 },
+  span_group_coverage: { kind: "flag", example: true },
+} as const;
+const UPGRADE_HINT = "3.2.0 업그레이드 절차는 references/installation.md";
 
 type Obj = Record<string, unknown>;
 
@@ -156,6 +167,12 @@ export function validateContract(raw: unknown): Contract {
   if ((search["bm25_b"] as number) > BM25_B_MAX) fail("search.bm25_b", `${BM25_B_MAX} 이하 필요`);
   for (const key of POSITIVE_INTEGERS) {
     if (!Number.isInteger(positiveFinite(search[key], `search.${key}`))) fail(`search.${key}`, "양의 정수 필요");
+  }
+  for (const [key, spec] of Object.entries(SEARCH_V32_KEYS)) {
+    const v = search[key];
+    if (!(key in search)) fail(`search.${key}`, `필수 필드 누락 — 예: "${key}": ${JSON.stringify(spec.example)} (${UPGRADE_HINT})`);
+    if (spec.kind === "count" && !(Number.isInteger(v) && (v as number) >= 0)) fail(`search.${key}`, "0 이상 정수 필요");
+    if (spec.kind === "flag" && typeof v !== "boolean") fail(`search.${key}`, "true/false 필요");
   }
   const boost = search["field_boost"];
   if (!isObj(boost)) fail("search.field_boost", "객체 필요");

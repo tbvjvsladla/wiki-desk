@@ -88,6 +88,11 @@ describe("init", () => {
     assert.ok(exists("__llm-wiki/receipt.json"), "receipt는 추적 대상(캐시 밖)");
     assert.ok(exists("__llm-wiki/index.md") && exists("__llm-wiki/log.md"));
   });
+  test("--apply는 기본 glossary.json(auto_extract 켬)을 만들고 receipt에 소유를 기록한다", () => {
+    init();
+    assert.deepEqual(JSON.parse(read("__llm-wiki/glossary.json")), { schema_version: 1, auto_extract: true, manual: [] });
+    assert.ok(Object.hasOwn(JSON.parse(read("__llm-wiki/receipt.json")).files, "__llm-wiki/glossary.json"));
+  });
   test("기존 위키가 있으면 거부한다(덮어쓰기 없음)", () => {
     init();
     assert.throws(() => initWiki(root, CONTRACT, { apply: true, now: NOW }), /이미 존재/);
@@ -362,11 +367,11 @@ describe("query·read·tree", () => {
     synced();
     const r = queryWiki(root, ["멀티턴 zzqqxx"]);
     assert.deepEqual(Object.keys(r).sort(), [
-      "corpus", "elapsed_ms", "index_cache_reset", "index_rebuilt", "invalid_cards", "missing_cards",
-      "query_tokens", "results", "stale", "terms", "unmatched_tokens",
+      "corpus", "elapsed_ms", "expanded_terms", "index_cache_reset", "index_rebuilt", "invalid_cards", "missing_cards",
+      "query_tokens", "related", "results", "stale", "terms", "unmatched_tokens",
     ]);
     assert.ok(r.unmatched_tokens.includes("zzqqxx"));
-    assert.deepEqual(Object.keys(r.results[0]).sort(), ["authority_rank", "path", "score", "spans", "title"]);
+    assert.deepEqual(Object.keys(r.results[0]).sort(), ["authority_rank", "lines_total", "match_lines", "path", "score", "spans", "title"]);
   });
   test("색인 가능한 토큰이 없는 질의는 거부(빈 결과와 구분)", () => {
     synced();
@@ -415,6 +420,160 @@ describe("query·read·tree", () => {
     const titles = JSON.stringify(treeOf(root, PLAN_REL));
     assert.match(titles, /"배경"/);
     assert.match(titles, /"결정"/);
+  });
+});
+
+describe("P1a 더 읽을 곳 안내(lines_total·section·match_lines)", () => {
+  const LONG_REL = "docs/plan/plan_26100106_긴문서.md";
+  const LONG = ["# 긴 문서", "", "## 배경", "서문 문단이다.", "", "## 설정", "임베딩 차원은 768로 둔다.", "", "다른 문단.", "",
+    "## 부록", "부록에서 임베딩 차원을 다시 적는다.", "", "임베딩 차원 표기는 같다.", ""].join("\n");
+  const withContract = (mutate: (c: Record<string, any>) => void): void => {
+    const c = JSON.parse(fs.readFileSync(CONTRACT, "utf8"));
+    mutate(c);
+    const alt = path.join(root, "alt-contract.json");
+    fs.writeFileSync(alt, JSON.stringify(c));
+    initWiki(root, alt, { apply: true, now: NOW });
+    syncWiki(root, { apply: true, now: NOW });
+  };
+  test("결과마다 문서 총 줄 수, 구간마다 소속 절(제목·시작·끝)", () => {
+    put(LONG_REL, LONG);
+    synced();
+    const hit = queryWiki(root, ["임베딩 차원"]).results.find((x) => x.path === LONG_REL)!;
+    assert.equal(hit.lines_total, LONG.split("\n").length);
+    const tree = treeOf(root, LONG_REL);
+    for (const sp of hit.spans) {
+      assert.ok(sp.section.start <= sp.start && sp.end <= sp.section.end, JSON.stringify(sp));
+      const flat = (ns: typeof tree): typeof tree => ns.flatMap((n) => [n, ...flat(n.children)]);
+      assert.ok(flat(tree).some((n) => n.title === sp.section.heading && n.start === sp.section.start && n.end === sp.section.end));
+    }
+  });
+  test("match_lines: 구간 밖에서 질의어가 나온 줄을 인용 가능한 ref(path:N-N)로, 줄 순서대로 최대 match_lines_max개", () => {
+    put(LONG_REL, LONG);
+    withContract((c) => { c.search.spans_per_result = 1; c.search.match_lines_max = 10; });
+    const hit = queryWiki(root, ["임베딩 차원"]).results.find((x) => x.path === LONG_REL)!;
+    const inSpan = (n: number): boolean => hit.spans.some((sp) => sp.start <= n && n <= sp.end);
+    assert.ok(hit.match_lines.length > 0);
+    const lines = hit.match_lines.map((ref) => {
+      const m = /^(.+):(\d+)-(\d+)$/.exec(ref)!;
+      assert.equal(m[1], LONG_REL);
+      assert.equal(m[2], m[3], "한 줄도 시작-끝 형식");
+      return Number(m[2]);
+    });
+    assert.deepEqual(lines, [...lines].sort((a, b) => a - b));
+    for (const [i, n] of lines.entries()) {
+      assert.equal(inSpan(n), false);
+      assert.match(LONG.split("\n")[n - 1], /임베딩|차원/);
+      assert.equal(readRef(root, hit.match_lines[i]).text, LONG.split("\n")[n - 1], "ref 그대로 read 가능");
+    }
+  });
+  test("match_lines_max는 개수를 자르고, 0이면 빈 목록이다(knob 거동)", () => {
+    put(LONG_REL, LONG);
+    withContract((c) => { c.search.spans_per_result = 1; c.search.match_lines_max = 1; });
+    assert.equal(queryWiki(root, ["임베딩 차원"]).results.find((x) => x.path === LONG_REL)!.match_lines.length, 1);
+    fs.rmSync(path.join(root, "__llm-wiki"), { recursive: true });
+    withContract((c) => { c.search.spans_per_result = 1; c.search.match_lines_max = 0; });
+    assert.deepEqual(queryWiki(root, ["임베딩 차원"]).results.find((x) => x.path === LONG_REL)!.match_lines, []);
+  });
+});
+
+describe("P2 관련·이후 문서 칸(related)", () => {
+  const OLD = "docs/plan/plan_26100107_설정.md";
+  const NEW = "docs/devlog/devlog_26100209_설정교체.md";
+  const REQ = "docs/request/request_26100108_검토.md";
+  beforeEach(() => {
+    put(OLD, "# 설정\n`persist_dir` 값은 data/faiss 로 둔다.\n");
+    put(NEW, "# 교체\npersist_dir 는 쓰이지 않아 index_cache 로 대체했다.\n");
+    put(REQ, "# 검토\nplan_26100107 을 검토해 달라.\n");
+  });
+  test("결과 구간의 식별자를 다룬 이후 문서와 피참조 문서를 이유와 함께 알려 준다", () => {
+    synced();
+    const r = queryWiki(root, ["persist_dir data faiss 둔다"], 1);
+    assert.equal(r.results[0].path, OLD);
+    const by = new Map(r.related.map((x) => [x.path, x]));
+    assert.equal(by.get(NEW)?.reason, "later_same_identifier");
+    assert.deepEqual(by.get(NEW)?.shared, ["persist_dir"]);
+    assert.equal(by.get(NEW)?.date, "26100209");
+    assert.equal(by.get(REQ)?.reason, "referred_by");
+    assert.equal(by.get(NEW)?.via, OLD);
+  });
+  test("related_max는 칸 크기를 정하고(0이면 빈 칸), 결과 순위는 바꾸지 않는다(knob 거동)", () => {
+    const run = (n: number) => {
+      const c = JSON.parse(fs.readFileSync(CONTRACT, "utf8"));
+      c.search.related_max = n;
+      const alt = path.join(root, `alt-${n}.json`);
+      fs.writeFileSync(alt, JSON.stringify(c));
+      fs.rmSync(path.join(root, "__llm-wiki"), { recursive: true, force: true });
+      initWiki(root, alt, { apply: true, now: NOW });
+      syncWiki(root, { apply: true, now: NOW });
+      return queryWiki(root, ["persist_dir data faiss 둔다"], 1);
+    };
+    const off = run(0);
+    const one = run(1);
+    const five = run(5);
+    assert.deepEqual(off.related, []);
+    assert.equal(one.related.length, 1);
+    assert.ok(five.related.length >= 2);
+    assert.deepEqual(off.results.map((x) => x.path), five.results.map((x) => x.path));
+  });
+});
+
+describe("query --with-text", () => {
+  test("플래그가 없으면 span 키는 기존 그대로(text 없음)", () => {
+    synced();
+    for (const r of queryWiki(root, ["임베딩 차원"]).results) {
+      for (const s of r.spans) assert.deepEqual(Object.keys(s).sort(), ["end", "heading_path", "ref", "section", "start"]);
+    }
+  });
+  test("켜면 각 span에 read와 같은 원문 text가 붙고, 구간은 span_max_lines 이하다", () => {
+    synced();
+    const r = queryWiki(root, ["임베딩 차원", "output_dimensionality"], undefined, { withText: true });
+    assert.ok(r.results.length > 0);
+    for (const hit of r.results) {
+      for (const s of hit.spans) {
+        assert.equal(s.text, readRef(root, s.ref).text);
+        assert.ok(s.end - s.start + 1 <= 40); // fixture span_max_lines
+      }
+    }
+  });
+});
+
+describe("glossary.json 질의 확장", () => {
+  const GLOSSARY = "__llm-wiki/glossary.json";
+  const glossary = (auto: boolean, manual: string[][]): void =>
+    put(GLOSSARY, JSON.stringify({ schema_version: 1, auto_extract: auto, manual }));
+  const paths = (r: ReturnType<typeof queryWiki>): string[] => r.results.map((x) => x.path);
+  beforeEach(() => {
+    put("docs/plan/plan_26100103_분석기.md", "# 분석\n형태소 분석기는 쓰지 않는다.\n");
+    put("docs/plan/plan_26100104_정의.md", "# 정의\n토크나이저(tokenizer)는 음절 bigram이다.\n");
+    put("docs/plan/plan_26100105_메모.md", "# 메모\n토크나이저 교체를 검토했다.\n");
+  });
+  test("파일이 없으면 확장하지 않고 출력 키도 그대로다", () => {
+    synced();
+    fs.rmSync(path.join(root, GLOSSARY));
+    const r = queryWiki(root, ["morphological analyzer"]);
+    assert.equal("expanded_terms" in r, false);
+    assert.equal(paths(r).includes("docs/plan/plan_26100103_분석기.md"), false);
+  });
+  test("수동 묶음으로 다른 표기의 문서를 찾고 expanded_terms를 보고한다", () => {
+    synced();
+    glossary(false, [["형태소 분석기", "morphological analyzer"]]);
+    const r = queryWiki(root, ["morphological analyzer"]);
+    assert.deepEqual(r.expanded_terms, ["형태소 분석기"]);
+    assert.ok(paths(r).includes("docs/plan/plan_26100103_분석기.md"));
+  });
+  test("auto_extract는 말뭉치의 괄호 병기 쌍으로 확장한다(끄면 확장 없음)", () => {
+    synced();
+    glossary(false, []);
+    assert.equal(paths(queryWiki(root, ["tokenizer"])).includes("docs/plan/plan_26100105_메모.md"), false);
+    glossary(true, []);
+    const r = queryWiki(root, ["tokenizer"]);
+    assert.deepEqual(r.expanded_terms, ["토크나이저"]);
+    assert.ok(paths(r).includes("docs/plan/plan_26100105_메모.md"));
+  });
+  test("형식이 틀린 glossary.json은 질의를 거부한다(fail-fast)", () => {
+    synced();
+    put(GLOSSARY, "{broken");
+    assert.throws(() => queryWiki(root, ["멀티턴"]), /glossary/);
   });
 });
 
@@ -552,6 +711,14 @@ describe("cli", () => {
     const out = JSON.parse(run("query", "--terms", "멀티턴", "--terms", "multi-turn"));
     assert.ok(out.results.length > 0);
     assert.notEqual(runRaw("read", "nope.md:1-2").status, 0);
+  });
+  test("query --with-text는 span text를 출력하고, 없으면 text 키가 없다", () => {
+    run("init", "--contract", CONTRACT, "--apply");
+    run("sync", "--apply");
+    const plain = JSON.parse(run("query", "--terms", "멀티턴"));
+    assert.equal("text" in plain.results[0].spans[0], false);
+    const withText = JSON.parse(run("query", "--terms", "멀티턴", "--with-text"));
+    assert.equal(typeof withText.results[0].spans[0].text, "string");
   });
   test("sync는 --apply 없이 쓰지 않는다", () => {
     run("init", "--contract", CONTRACT, "--apply");
