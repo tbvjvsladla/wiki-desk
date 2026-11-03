@@ -120,7 +120,7 @@ describe("3.2.0 search 필수 키", () => {
   test("키가 빠지면 넣을 키 이름·예시 값·업그레이드 안내를 담은 오류로 거부한다", () => {
     for (const key of KEYS) {
       const raw = withChange((c) => { delete c.search[key]; });
-      assert.throws(() => validateContract(raw), new RegExp(`search\\.${key}.*예: "${key}": .*installation\\.md`), key);
+      assert.throws(() => validateContract(raw), new RegExp(`search\\.${key}.*예: "${key}": .*upgrade\\.md`), key);
     }
   });
   test("0은 '안내 끔'으로 허용한다(정수 ≥ 0)", () => {

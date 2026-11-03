@@ -7,7 +7,7 @@
     "node_modules",
     ".cache"
   ],
-  "file_count": 54,
+  "file_count": 58,
   "files": [
     {
       "path": ".gitattributes",
@@ -29,15 +29,15 @@
     },
     {
       "path": "README.md",
-      "bytes": 14261,
+      "bytes": 20652,
       "mode": "0644",
-      "sha256": "f4652742fa35af05a957b62b1fb6d79490fd6045e9acfba78380a735d07d756f"
+      "sha256": "f7523425ce1bdfff7fd76f9707df28c15d9958ce53779f7b2089544cf0e603d6"
     },
     {
       "path": "SKILL.md",
-      "bytes": 8632,
+      "bytes": 9340,
       "mode": "0644",
-      "sha256": "f00e316f3dc9dee8cb0fc8fef12a192c2e404a63310ec905be7ffea98be27bfb"
+      "sha256": "0da7236159c8072e379278ef736935c91429888836598960a53659e7d7326151"
     },
     {
       "path": "assets/glossary.example.json",
@@ -55,7 +55,7 @@
       "path": "package.json",
       "bytes": 394,
       "mode": "0644",
-      "sha256": "2699f0ce56492d42585ef89fa4a41486284e0963b98375316423d724131a1ff9"
+      "sha256": "440fe83f79dce2e8332c27c4e3ed1b07684b49307be478198050b59226daf74f"
     },
     {
       "path": "references/authority.md",
@@ -65,15 +65,21 @@
     },
     {
       "path": "references/charter.md",
-      "bytes": 3657,
+      "bytes": 3913,
       "mode": "0644",
-      "sha256": "ae49cc7f0f166f9a947d50e251bee41e99dcef9c41ead2c2b9f67423cfcae0c3"
+      "sha256": "a16bf117a1cc734d92d96ca24a557932019660778815ee9031b12e0dec54e8b1"
+    },
+    {
+      "path": "references/hosts.md",
+      "bytes": 7304,
+      "mode": "0644",
+      "sha256": "31fa0137f07d6691ce94b79de102e99f6a89e352de0f4fef8af7dc851d6c77b4"
     },
     {
       "path": "references/installation.md",
-      "bytes": 4279,
+      "bytes": 3723,
       "mode": "0644",
-      "sha256": "8bd19bc7f4207e4db13270b1318b077e8d934496eb79b7e74b93a1ed11b0243c"
+      "sha256": "c94d4c8425317e33415f351a2cb515d7ce9f9323500a0850c2db1dec0d67c2bc"
     },
     {
       "path": "references/maintenance.md",
@@ -83,9 +89,21 @@
     },
     {
       "path": "references/okf.md",
-      "bytes": 5620,
+      "bytes": 5730,
       "mode": "0644",
-      "sha256": "5da6fd34225ee2eab2228a786c8629646fe9483a2a5c8f280947cb26a2bb4ebe"
+      "sha256": "fe9aa21cab6be49eaf36a69f03a83fa3621934aecfcf20d254a7174ef632772c"
+    },
+    {
+      "path": "references/recommendations.md",
+      "bytes": 7202,
+      "mode": "0644",
+      "sha256": "d177e54a3836c68ad75f3a3c7313081ed0a7729223882a4ab85433b7615b41d5"
+    },
+    {
+      "path": "references/upgrade.md",
+      "bytes": 5860,
+      "mode": "0644",
+      "sha256": "200290ecaee85c9319e0c55b385b9ed51d409f1ecca3a2d4b4623cf391170e91"
     },
     {
       "path": "scripts/package-manifest.ts",
@@ -101,9 +119,9 @@
     },
     {
       "path": "src/cli.ts",
-      "bytes": 3069,
+      "bytes": 3056,
       "mode": "0644",
-      "sha256": "6696d30bab1abaf06910550687fb92cb46ecba571d0252ba0dd0c9e3b9e137cc"
+      "sha256": "07e626ef70b0cdea8739252124f59db80d457545e49eecfc256e15af7d060a90"
     },
     {
       "path": "src/commands.ts",
@@ -113,9 +131,9 @@
     },
     {
       "path": "src/contract.ts",
-      "bytes": 13625,
+      "bytes": 13614,
       "mode": "0644",
-      "sha256": "7bb172ae4146ad6a3a4569f112e1479aa08c7be4bc7bd8449665733320c335cc"
+      "sha256": "191189d29143a2d9154f8007b499e201e24dcc60a5c656027aad87ed113885d8"
     },
     {
       "path": "src/frontmatter.ts",
@@ -197,9 +215,9 @@
     },
     {
       "path": "tests/contract.test.ts",
-      "bytes": 17048,
+      "bytes": 17043,
       "mode": "0644",
-      "sha256": "cb060977e614ada24d772ae7a309ae4e6896b01559947774f45bf246624df6ca"
+      "sha256": "70babd94c75fb93fbe366d5f6916bb84ccbc472a30f7a34cb5c7b76284a2c8c8"
     },
     {
       "path": "tests/fixtures/contract/valid.json",
@@ -320,6 +338,12 @@
       "bytes": 1431,
       "mode": "0644",
       "sha256": "76c55d39e44199a1ff66cce9a0687cdc49249eb6c1609fb2dcf0e7dbc027b5c5"
+    },
+    {
+      "path": "tests/skill-doc.test.ts",
+      "bytes": 3739,
+      "mode": "0644",
+      "sha256": "1c9304f1b40fc7f03a7efb9a3b6cb62fe526fbf3380583b7d3a816fb7513f212"
     },
     {
       "path": "tests/tokenize.test.ts",

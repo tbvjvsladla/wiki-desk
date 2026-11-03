@@ -1,4 +1,4 @@
-// wiki-desk CLI. 사용: node .claude/skills/wiki-desk/src/cli.ts <명령> [옵션]  — 출력은 JSON(stdout)
+// wiki-desk CLI. 사용: node <skill-dir>/src/cli.ts <명령> [옵션]  — 출력은 JSON(stdout)
 import { parseArgs } from "node:util";
 import { initWiki, syncWiki, queryWiki, readRef, treeOf, checkWiki, statusWiki, removeWiki } from "./commands.ts";
 

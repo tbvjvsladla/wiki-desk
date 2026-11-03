@@ -43,7 +43,7 @@ export const SEARCH_V32_KEYS = {
   related_max: { kind: "count", example: 5 },
   span_group_coverage: { kind: "flag", example: true },
 } as const;
-const UPGRADE_HINT = "3.2.0 업그레이드 절차는 references/installation.md";
+const UPGRADE_HINT = "업그레이드 절차는 references/upgrade.md";
 
 type Obj = Record<string, unknown>;
 

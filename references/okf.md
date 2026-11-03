@@ -3,9 +3,9 @@
 ## 세 층의 구분
 | 층 | 위치 | 계층 |
 |---|---|---|
-| 스킬(코드·지침) | `.claude/skills/wiki-desk/` | Common — 모든 sync 브랜치에서 동일 |
-| 지식 bundle(포인터 카드) | `<wiki_dir>/` (`__llm-wiki/` 등) — `index.md`·`log.md`·`<cards_dir>/**` | Workflow-local — 브랜치별 |
-| 운영 상태 | `<wiki_dir>/contract.json`(합의 계약) · `<wiki_dir>/receipt.json`(생성물 소유 기록 — sync 보호·remove 판단 근거) · `<wiki_dir>/<cache_dir>/`(파생 색인) | 계약·receipt=Workflow-local(추적), 캐시=Machine-local(추적 제외) |
+| 스킬(코드·지침) | `<skill-dir>` — Claude Code `.claude/skills/wiki-desk/` · Codex `.agents/skills/wiki-desk/` | 배포본 그대로(호스트별 폴더는 같은 버전) |
+| 지식 bundle(포인터 카드) | `<wiki_dir>/` (`__llm-wiki/` 등) — `index.md`·`log.md`·`<cards_dir>/**` | 프로젝트 데이터 — 브랜치별(git 추적) |
+| 운영 상태 | `<wiki_dir>/contract.json`(합의 계약) · `<wiki_dir>/receipt.json`(생성물 소유 기록 — sync 보호·remove 판단 근거) · `<wiki_dir>/<cache_dir>/`(파생 색인) | 계약·receipt=프로젝트 데이터(추적), 캐시=기계 파생물(추적 제외) |
 
 `contract.json`·`receipt.json`과 캐시는 Markdown이 아니므로 OKF concept 분모에 들어가지 않는다. bundle 안의 그 밖의 `.md`는 모두 concept이며(`index.md`·`log.md`는 예약 파일) 임의 예외를 두지 않는다.
 

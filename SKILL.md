@@ -4,7 +4,7 @@ description: "Use when querying or indexing this project's own documents. 위키
 license: MIT
 compatibility: "Node.js 24+ (runs .ts directly, zero runtime dependencies). Tests: node --test."
 metadata:
-  version: "3.2.0"
+  version: "3.3.0"
   lineage: "TypeScript redesign of wiki-desk 1.1.0 (Python)"
   knowledge-format: "OKF 0.2"
 ---
@@ -16,18 +16,25 @@ metadata:
 
 - 이 프로젝트 문서만 다룬다. 루트 밖 문서·다른 에이전트의 위키는 입고하지 않는다.
 - 카드는 원문 frontmatter 값을 **그대로 옮긴 메타**와 원문 경로만 가진다. 요약을 생성하지 않는다.
-- 브랜치마다 `__llm-wiki/`가 따로 있다(Workflow-local). 스킬 코드는 모든 sync 브랜치에서 동일하다(Common).
+- 위키(`__llm-wiki/`)는 프로젝트(브랜치)마다 따로 있는 데이터다. 스킬 폴더는 코드·지침뿐이며 위키를 담지 않는다.
 
 ## 명령 (프로젝트 루트에서)
-명령은 한 줄에 하나씩 그대로 실행한다. 셸 변수(`W=...; $W`)나 `cd ... &&`로 묶으면 서브에이전트의 Bash 허용 규칙(`Bash(node .claude/skills/wiki-desk/src/cli.ts:*)`)에 걸리지 않아 거부될 수 있다.
+`<skill-dir>`는 이 SKILL.md가 있는 폴더의 프로젝트 루트 상대 경로다. 자기 호스트 경로로 바꿔 실행한다.
+
+| 호스트 | `<skill-dir>` | 명시 호출 |
+|---|---|---|
+| Claude Code | `.claude/skills/wiki-desk` | 스킬 이름 `wiki-desk` |
+| Codex | `.agents/skills/wiki-desk` | `$wiki-desk` |
+
+명령은 한 줄에 하나씩 그대로 실행한다(셸 변수·`cd … &&`로 묶지 않는다 — 호스트의 명령 허용 규칙에 걸릴 수 있다). 프로젝트 루트가 아닌 곳에서 실행하거나 호스트별 권한·설치·인식 확인이 필요하면 [호스트별 안내](references/hosts.md).
 ```bash
-node .claude/skills/wiki-desk/src/cli.ts query --terms "멀티턴 기본값" --terms "multi-turn default" --with-text --limit 5   # 변형 여러 개 = OR, 상위 5개 구간 원문 포함
-node .claude/skills/wiki-desk/src/cli.ts tree <원문 경로>.md                 # 헤딩 트리(줄범위) — 구조 조회
-node .claude/skills/wiki-desk/src/cli.ts read <원문 경로>.md:41-58       # 근거 구간 원문 읽기
-node .claude/skills/wiki-desk/src/cli.ts status    # 원문·카드·보존 카드 수, 색인 캐시 유무 (stale·누락은 check)
-node .claude/skills/wiki-desk/src/cli.ts check     # OKF 0.2 MUST·카드 누락/고아/stale 검사
-node .claude/skills/wiki-desk/src/cli.ts sync      # 입고 계획만 출력(쓰기 0)
-node .claude/skills/wiki-desk/src/cli.ts sync --apply   # 계획 적용(카드 생성·갱신)
+node <skill-dir>/src/cli.ts query --terms "멀티턴 기본값" --terms "multi-turn default" --with-text --limit 5   # 변형 여러 개 = OR, 상위 5개 구간 원문 포함
+node <skill-dir>/src/cli.ts tree <원문 경로>.md                 # 헤딩 트리(줄범위) — 구조 조회
+node <skill-dir>/src/cli.ts read <원문 경로>.md:41-58       # 근거 구간 원문 읽기
+node <skill-dir>/src/cli.ts status    # 원문·카드·보존 카드 수, 색인 캐시 유무 (stale·누락은 check)
+node <skill-dir>/src/cli.ts check     # OKF 0.2 MUST·카드 누락/고아/stale 검사
+node <skill-dir>/src/cli.ts sync      # 입고 계획만 출력(쓰기 0)
+node <skill-dir>/src/cli.ts sync --apply   # 계획 적용(카드 생성·갱신)
 ```
 출력은 JSON(stdout). 명시 검증 오류는 한국어 메시지, 그 밖의 시스템 오류는 Node 원문 메시지로 exit≠0. `check`는 문제가 있으면 JSON을 낸 뒤 exit 1.
 `query`는 색인 가능한 토큰이 하나도 없으면(1글자 영숫자·기호만) 거부하고, 출력에 `query_tokens`·`unmatched_tokens`·`stale`·`missing_cards`·`invalid_cards`를 함께 준다. `--limit`로 계약의 `result_limit`보다 많이 받을 수 있다.
@@ -55,5 +62,7 @@ node .claude/skills/wiki-desk/src/cli.ts sync --apply   # 계획 적용(카드 �
 - 그 밖에 사람이 고친 카드(본문·카드 키 변경)·`index.md`·`log.md`(receipt 해시와 다름)는 `sync`가 덮어쓰지 않고 `protected`로 보고한다. 원문이 바뀌어도 stale로 남으므로, 수정분을 옮겨 둔 뒤 카드를 지우고 `sync --apply`하면 다시 생성된다.
 
 ## 참고
-- [OKF 읽기와 카드 형식](references/okf.md) · [권위와 검토 경계](references/authority.md) · [설치·제거·업그레이드](references/installation.md) · [유지보수](references/maintenance.md) · [설치 프로젝트 헌장에 넣을 것](references/charter.md)
+- [호스트별 안내(Claude Code·Codex)](references/hosts.md) · [설치·초기화·제거](references/installation.md) · [업그레이드(버전 패치)](references/upgrade.md) · [유지보수](references/maintenance.md)
+- [OKF 읽기와 카드 형식](references/okf.md) · [권위와 검토 경계](references/authority.md)
+- [선택형 운영 권고](references/recommendations.md) — 문서 역할·헌장 연계·검증 효율 제안. **설치·질의에는 필요 없고**, 사용자가 채택을 요청하지 않았으면 적용하지 않는다(헌장·폴더를 고치지 않는다). 헌장 항목 예시는 [charter.md](references/charter.md).
 - 결과 보고 시 지식 회수·카드 갱신·형식 적합성·의미상 판단을 구분한다. 부분 성공을 전체 완료로 평탄화하지 않는다.
