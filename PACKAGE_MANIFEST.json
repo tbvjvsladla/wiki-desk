@@ -29,15 +29,15 @@
     },
     {
       "path": "README.md",
-      "bytes": 20652,
+      "bytes": 21219,
       "mode": "0644",
-      "sha256": "f7523425ce1bdfff7fd76f9707df28c15d9958ce53779f7b2089544cf0e603d6"
+      "sha256": "0872afd1d4f2408d825c38c8f74b2153c2d89e6bbda58a27ded6b5d9c84748ac"
     },
     {
       "path": "SKILL.md",
       "bytes": 9340,
       "mode": "0644",
-      "sha256": "0da7236159c8072e379278ef736935c91429888836598960a53659e7d7326151"
+      "sha256": "b7e098aafca2dfb75ac485ed4f1d99f477548abdce837efef509fac2d3446916"
     },
     {
       "path": "assets/glossary.example.json",
@@ -55,7 +55,7 @@
       "path": "package.json",
       "bytes": 394,
       "mode": "0644",
-      "sha256": "440fe83f79dce2e8332c27c4e3ed1b07684b49307be478198050b59226daf74f"
+      "sha256": "a615a8660b749ebd69cfeb16f6108edb970045cc8f366fc22b75b78f14ce8878"
     },
     {
       "path": "references/authority.md",
@@ -73,7 +73,7 @@
       "path": "references/hosts.md",
       "bytes": 7304,
       "mode": "0644",
-      "sha256": "31fa0137f07d6691ce94b79de102e99f6a89e352de0f4fef8af7dc851d6c77b4"
+      "sha256": "e29225c96848cedf12e709dab9a125fe057c9d00da566f64337b4356610ddfc9"
     },
     {
       "path": "references/installation.md",
@@ -101,9 +101,9 @@
     },
     {
       "path": "references/upgrade.md",
-      "bytes": 5860,
+      "bytes": 6483,
       "mode": "0644",
-      "sha256": "200290ecaee85c9319e0c55b385b9ed51d409f1ecca3a2d4b4623cf391170e91"
+      "sha256": "d96800d9854446a8a0b9111acdffcc70b070120be9738af90f31241cefbc544e"
     },
     {
       "path": "scripts/package-manifest.ts",
@@ -341,9 +341,9 @@
     },
     {
       "path": "tests/skill-doc.test.ts",
-      "bytes": 3739,
+      "bytes": 4157,
       "mode": "0644",
-      "sha256": "1c9304f1b40fc7f03a7efb9a3b6cb62fe526fbf3380583b7d3a816fb7513f212"
+      "sha256": "76d66b6dfa3ff951dc732ec4336baa236fe3683124d8e0d2c689df5f067825be"
     },
     {
       "path": "tests/tokenize.test.ts",

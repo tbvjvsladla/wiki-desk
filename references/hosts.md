@@ -24,7 +24,7 @@ wiki-desk의 CLI·계약·위키 형식은 호스트와 무관하게 같다. 호
 (
   set -euo pipefail
   SOURCE="/absolute/path/to/wiki-desk"     # 이 저장소를 받은 폴더(git clone)
-  VERSION="v3.3.0"
+  VERSION="v3.3.1"
   PROJECT="/absolute/path/to/project"      # 설치할 프로젝트 루트
   DEST="$PROJECT/.claude/skills/wiki-desk"
   if [ -e "$DEST" ] || [ -L "$DEST" ]; then
@@ -44,7 +44,7 @@ wiki-desk의 CLI·계약·위키 형식은 호스트와 무관하게 같다. 호
 (
   set -euo pipefail
   SOURCE="/absolute/path/to/wiki-desk"     # 이 저장소를 받은 폴더(git clone)
-  VERSION="v3.3.0"
+  VERSION="v3.3.1"
   PROJECT="/absolute/path/to/project"      # 설치할 프로젝트 루트
   DEST="$PROJECT/.agents/skills/wiki-desk"
   if [ -e "$DEST" ] || [ -L "$DEST" ]; then

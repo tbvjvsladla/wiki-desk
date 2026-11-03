@@ -4,7 +4,7 @@ description: "Use when querying or indexing this project's own documents. 위키
 license: MIT
 compatibility: "Node.js 24+ (runs .ts directly, zero runtime dependencies). Tests: node --test."
 metadata:
-  version: "3.3.0"
+  version: "3.3.1"
   lineage: "TypeScript redesign of wiki-desk 1.1.0 (Python)"
   knowledge-format: "OKF 0.2"
 ---

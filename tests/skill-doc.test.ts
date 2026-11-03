@@ -69,3 +69,11 @@ test("README는 헌장 개정·폴더 신설 제안 문서의 위험을 배포 �
   // 고지는 버전 줄 바로 다음 절이어야 한다(가장 먼저 읽히도록)
   assert.ok(readme.indexOf("## 배포 수신자 고지") < readme.indexOf("## 브랜치 안내"), "고지 절이 브랜치 안내보다 뒤에 있음");
 });
+
+test("업그레이드 백업은 스킬 탐색 경로 밖에 둔다(같은 이름 스킬 중복 발견 방지)", () => {
+  for (const rel of ["references/upgrade.md", "README.md"]) {
+    const doc = read(rel);
+    assert.ok(!/<skill-dir>\.bak|…bak-/.test(doc), `${rel}: 백업을 스킬 폴더 옆(탐색 경로 안)에 두라는 안내`);
+  }
+  assert.match(read("references/upgrade.md"), /탐색 경로 밖/);
+});
